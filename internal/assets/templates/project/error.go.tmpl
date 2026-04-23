@@ -1,0 +1,38 @@
+package middleware
+
+import (
+	"errors"
+	"net/http"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+
+	apperr "{{.ModulePath}}/internal/core/errors"
+)
+
+// ErrorHandler maps errors added via c.Error() to JSON responses.
+func ErrorHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+		if len(c.Errors) == 0 {
+			return
+		}
+		err := c.Errors.Last().Err
+
+		var appErr *apperr.AppError
+		if errors.As(err, &appErr) {
+			status := apperr.HTTPStatus(appErr)
+			code := strings.ToUpper(strings.ReplaceAll(appErr.Cause.Error(), " ", "_"))
+			c.JSON(status, gin.H{
+				"success": false,
+				"error":   gin.H{"code": code, "message": appErr.Message},
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   gin.H{"code": "INTERNAL_ERROR", "message": "an unexpected error occurred"},
+		})
+	}
+}

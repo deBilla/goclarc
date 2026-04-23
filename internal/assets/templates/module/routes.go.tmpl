@@ -1,0 +1,13 @@
+package {{.ModuleName}}
+
+import "github.com/gin-gonic/gin"
+
+// RegisterRoutes mounts the {{.ModuleTitle}} CRUD routes onto rg.
+func RegisterRoutes(rg *gin.RouterGroup, h *Handler, middlewares ...gin.HandlerFunc) {
+	g := rg.Group("/{{.ModulePlural}}", middlewares...)
+	g.POST("", h.Create)
+	g.GET("", h.List)
+	g.GET("/:id", h.GetByID)
+	g.PATCH("/:id", h.Update)
+	g.DELETE("/:id", h.Delete)
+}

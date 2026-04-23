@@ -1,0 +1,98 @@
+package {{.ModuleName}}
+
+import (
+	"context"
+	"fmt"
+
+	"firebase.google.com/go/v4/db"
+)
+
+// Repository defines the data-access contract for the {{.ModuleTitle}} domain.
+type Repository interface {
+	Create(ctx context.Context, p CreateParams) (*Entity, error)
+	GetByID(ctx context.Context, id string) (*Entity, error)
+	List(ctx context.Context) ([]*Entity, error)
+	Update(ctx context.Context, p UpdateParams) (*Entity, error)
+	Delete(ctx context.Context, id string) error
+}
+
+type repository struct {
+	ref *db.Ref
+}
+
+// NewRepository constructs a Repository backed by the given Firebase RTDB client.
+func NewRepository(client *db.Client) Repository {
+	return &repository{ref: client.NewRef("{{.TableName}}")}
+}
+
+func (r *repository) Create(ctx context.Context, p CreateParams) (*Entity, error) {
+	data := map[string]interface{}{
+{{- range .CreateFields}}
+		"{{.JSONTag}}": p.{{.GoName}},
+{{- end}}
+	}
+	newRef, err := r.ref.Push(ctx, data)
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.Create: %w", err)
+	}
+	return r.GetByID(ctx, newRef.Key)
+}
+
+func (r *repository) GetByID(ctx context.Context, id string) (*Entity, error) {
+	var data map[string]interface{}
+	if err := r.ref.Child(id).Get(ctx, &data); err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.GetByID: %w", err)
+	}
+	if data == nil {
+		return nil, fmt.Errorf("{{.ModuleName}} not found")
+	}
+	return mapToEntity(data, id), nil
+}
+
+func (r *repository) List(ctx context.Context) ([]*Entity, error) {
+	var data map[string]map[string]interface{}
+	if err := r.ref.Get(ctx, &data); err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.List: %w", err)
+	}
+	entities := make([]*Entity, 0, len(data))
+	for id, item := range data {
+		entities = append(entities, mapToEntity(item, id))
+	}
+	return entities, nil
+}
+
+func (r *repository) Update(ctx context.Context, p UpdateParams) (*Entity, error) {
+	updates := map[string]interface{}{}
+{{- range .UpdateFields}}
+	if p.{{.GoName}} != nil {
+		updates["{{.JSONTag}}"] = p.{{.GoName}}
+	}
+{{- end}}
+	if err := r.ref.Child(p.ID).Update(ctx, updates); err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.Update: %w", err)
+	}
+	return r.GetByID(ctx, p.ID)
+}
+
+func (r *repository) Delete(ctx context.Context, id string) error {
+	if err := r.ref.Child(id).Delete(ctx); err != nil {
+		return fmt.Errorf("{{.ModuleName}}.repository.Delete: %w", err)
+	}
+	return nil
+}
+
+func mapToEntity(data map[string]interface{}, id string) *Entity {
+	e := &Entity{}
+{{- range .Fields}}
+{{- if .IsPrimary}}
+	e.{{.GoName}} = id
+{{- else}}
+	if v, ok := data["{{.JSONTag}}"]; ok && v != nil {
+		if cast, ok := v.({{.EntityType}}); ok {
+			e.{{.GoName}} = cast
+		}
+	}
+{{- end}}
+{{- end}}
+	return e
+}

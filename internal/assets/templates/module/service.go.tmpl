@@ -1,0 +1,63 @@
+package {{.ModuleName}}
+
+import (
+	"context"
+	"fmt"
+)
+
+// Service defines the business operations for the {{.ModuleTitle}} domain.
+type Service interface {
+	Create(ctx context.Context, req CreateRequest) (*Entity, error)
+	GetByID(ctx context.Context, id string) (*Entity, error)
+	List(ctx context.Context) ([]*Entity, error)
+	Update(ctx context.Context, id string, req UpdateRequest) (*Entity, error)
+	Delete(ctx context.Context, id string) error
+}
+
+type service struct {
+	repo Repository
+}
+
+// NewService constructs a Service backed by the given Repository.
+func NewService(repo Repository) Service {
+	return &service{repo: repo}
+}
+
+func (s *service) Create(ctx context.Context, req CreateRequest) (*Entity, error) {
+	entity, err := s.repo.Create(ctx, req.ToCreateParams())
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.service.Create: %w", err)
+	}
+	return entity, nil
+}
+
+func (s *service) GetByID(ctx context.Context, id string) (*Entity, error) {
+	entity, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.service.GetByID: %w", err)
+	}
+	return entity, nil
+}
+
+func (s *service) List(ctx context.Context) ([]*Entity, error) {
+	entities, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.service.List: %w", err)
+	}
+	return entities, nil
+}
+
+func (s *service) Update(ctx context.Context, id string, req UpdateRequest) (*Entity, error) {
+	entity, err := s.repo.Update(ctx, req.ToUpdateParams(id))
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.service.Update: %w", err)
+	}
+	return entity, nil
+}
+
+func (s *service) Delete(ctx context.Context, id string) error {
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return fmt.Errorf("{{.ModuleName}}.service.Delete: %w", err)
+	}
+	return nil
+}

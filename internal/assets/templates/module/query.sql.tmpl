@@ -1,0 +1,39 @@
+-- name: Create{{.ModuleTitle}} :one
+INSERT INTO {{.TableName}} (
+{{- range $i, $f := .CreateFields}}
+{{- if $i}},
+{{- end}}
+  {{$f.Name}}
+{{- end}}
+) VALUES (
+{{- range $i, $f := .CreateFields}}
+{{- if $i}},
+{{- end}}
+  @{{$f.Name}}
+{{- end}}
+)
+RETURNING *;
+
+-- name: Get{{.ModuleTitle}}ByID :one
+SELECT * FROM {{.TableName}}
+WHERE id = @id
+LIMIT 1;
+
+-- name: List{{.ModuleTitle}}s :many
+SELECT * FROM {{.TableName}}
+ORDER BY created_at DESC;
+
+-- name: Update{{.ModuleTitle}} :one
+UPDATE {{.TableName}}
+SET
+{{- range $i, $f := .UpdateFields}}
+{{- if $i}},
+{{- end}}
+  {{$f.Name}} = COALESCE(@{{$f.Name}}, {{$f.Name}})
+{{- end}}
+WHERE id = @id
+RETURNING *;
+
+-- name: Delete{{.ModuleTitle}} :exec
+DELETE FROM {{.TableName}}
+WHERE id = @id;

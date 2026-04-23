@@ -1,0 +1,54 @@
+package {{.ModuleName}}
+
+// CreateRequest holds the fields accepted when creating a new {{.ModuleTitle}}.
+type CreateRequest struct {
+{{- range .CreateFields}}
+{{- if .BindingTag}}
+	{{.GoName}} {{.CreateType}} `json:"{{.JSONTag}}" {{.BindingTag}}`
+{{- else}}
+	{{.GoName}} {{.CreateType}} `json:"{{.JSONTag}}"`
+{{- end}}
+{{- end}}
+}
+
+// UpdateRequest holds the fields accepted when updating an existing {{.ModuleTitle}}.
+// All fields are optional — only non-nil values are applied.
+type UpdateRequest struct {
+{{- range .UpdateFields}}
+	{{.GoName}} {{.UpdateType}} `json:"{{.JSONTag}}"`
+{{- end}}
+}
+
+// CreateParams maps a CreateRequest to repository-level parameters.
+type CreateParams struct {
+{{- range .CreateFields}}
+	{{.GoName}} {{.CreateType}}
+{{- end}}
+}
+
+// UpdateParams maps an UpdateRequest to repository-level parameters.
+type UpdateParams struct {
+	ID string
+{{- range .UpdateFields}}
+	{{.GoName}} {{.UpdateType}}
+{{- end}}
+}
+
+// ToCreateParams converts the validated request to repository params.
+func (r *CreateRequest) ToCreateParams() CreateParams {
+	return CreateParams{
+{{- range .CreateFields}}
+		{{.GoName}}: r.{{.GoName}},
+{{- end}}
+	}
+}
+
+// ToUpdateParams converts the validated request to repository params for the given ID.
+func (r *UpdateRequest) ToUpdateParams(id string) UpdateParams {
+	return UpdateParams{
+		ID: id,
+{{- range .UpdateFields}}
+		{{.GoName}}: r.{{.GoName}},
+{{- end}}
+	}
+}

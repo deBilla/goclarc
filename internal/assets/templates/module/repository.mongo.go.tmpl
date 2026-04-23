@@ -1,0 +1,134 @@
+package {{.ModuleName}}
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+)
+
+// Repository defines the data-access contract for the {{.ModuleTitle}} domain.
+type Repository interface {
+	Create(ctx context.Context, p CreateParams) (*Entity, error)
+	GetByID(ctx context.Context, id string) (*Entity, error)
+	List(ctx context.Context) ([]*Entity, error)
+	Update(ctx context.Context, p UpdateParams) (*Entity, error)
+	Delete(ctx context.Context, id string) error
+}
+
+type repository struct {
+	coll *mongo.Collection
+}
+
+// NewRepository constructs a Repository backed by the given mongo.Database.
+func NewRepository(db *mongo.Database) Repository {
+	return &repository{coll: db.Collection("{{.TableName}}")}
+}
+
+// bson{{.ModuleTitle}} is the MongoDB document representation.
+type bson{{.ModuleTitle}} struct {
+	ID bson.ObjectID `bson:"_id,omitempty"`
+{{- range .Fields}}
+{{- if not .IsPrimary}}
+	{{.GoName}} {{.EntityType}} `bson:"{{.JSONTag}}"`
+{{- end}}
+{{- end}}
+}
+
+func (r *repository) Create(ctx context.Context, p CreateParams) (*Entity, error) {
+	doc := bson{{.ModuleTitle}}{
+{{- range .CreateFields}}
+		{{.GoName}}: p.{{.GoName}},
+{{- end}}
+	}
+	res, err := r.coll.InsertOne(ctx, doc)
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.Create: %w", err)
+	}
+	doc.ID = res.InsertedID.(bson.ObjectID)
+	return bsonToEntity(&doc), nil
+}
+
+func (r *repository) GetByID(ctx context.Context, id string) (*Entity, error) {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}} not found")
+	}
+	var doc bson{{.ModuleTitle}}
+	if err := r.coll.FindOne(ctx, bson.M{"_id": oid}).Decode(&doc); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, fmt.Errorf("{{.ModuleName}} not found")
+		}
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.GetByID: %w", err)
+	}
+	return bsonToEntity(&doc), nil
+}
+
+func (r *repository) List(ctx context.Context) ([]*Entity, error) {
+	cursor, err := r.coll.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.List: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var docs []bson{{.ModuleTitle}}
+	if err := cursor.All(ctx, &docs); err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.List decode: %w", err)
+	}
+	entities := make([]*Entity, len(docs))
+	for i := range docs {
+		entities[i] = bsonToEntity(&docs[i])
+	}
+	return entities, nil
+}
+
+func (r *repository) Update(ctx context.Context, p UpdateParams) (*Entity, error) {
+	oid, err := bson.ObjectIDFromHex(p.ID)
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}} not found")
+	}
+	set := bson.M{}
+{{- range .UpdateFields}}
+	if p.{{.GoName}} != nil {
+		set["{{.JSONTag}}"] = p.{{.GoName}}
+	}
+{{- end}}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	var doc bson{{.ModuleTitle}}
+	if err := r.coll.FindOneAndUpdate(ctx, bson.M{"_id": oid}, bson.M{"$set": set}, opts).Decode(&doc); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, fmt.Errorf("{{.ModuleName}} not found")
+		}
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.Update: %w", err)
+	}
+	return bsonToEntity(&doc), nil
+}
+
+func (r *repository) Delete(ctx context.Context, id string) error {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return fmt.Errorf("{{.ModuleName}} not found")
+	}
+	res, err := r.coll.DeleteOne(ctx, bson.M{"_id": oid})
+	if err != nil {
+		return fmt.Errorf("{{.ModuleName}}.repository.Delete: %w", err)
+	}
+	if res.DeletedCount == 0 {
+		return fmt.Errorf("{{.ModuleName}} not found")
+	}
+	return nil
+}
+
+func bsonToEntity(doc *bson{{.ModuleTitle}}) *Entity {
+	return &Entity{
+{{- range .Fields}}
+{{- if .IsPrimary}}
+		{{.GoName}}: doc.ID.Hex(),
+{{- else}}
+		{{.GoName}}: doc.{{.GoName}},
+{{- end}}
+{{- end}}
+	}
+}

@@ -1,0 +1,25 @@
+// Package middleware provides Gin middleware for {{.ProjectName}}.
+package middleware
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+// Auth returns a middleware that reads the x-user-id header and injects it
+// into the Gin context. Replace this stub with your real auth logic.
+func Auth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.GetHeader("x-user-id")
+		if userID == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"error":   gin.H{"code": "UNAUTHORIZED", "message": "missing x-user-id header"},
+			})
+			return
+		}
+		c.Set("userID", userID)
+		c.Next()
+	}
+}

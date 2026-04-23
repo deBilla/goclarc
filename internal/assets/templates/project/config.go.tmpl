@@ -1,0 +1,21 @@
+// Package config loads application configuration from the environment.
+package config
+
+import "github.com/caarlos0/env/v11"
+
+// Config holds all runtime configuration for {{.ProjectName}}.
+type Config struct {
+	Port        int    `env:"PORT"         envDefault:"{{.Port}}"`
+	DatabaseURL string `env:"DATABASE_URL"  required:"true"`
+	RedisHost   string `env:"REDIS_HOST"    envDefault:"127.0.0.1"`
+	RedisPort   int    `env:"REDIS_PORT"    envDefault:"6379"`
+}
+
+// Load parses configuration from environment variables.
+func Load() (*Config, error) {
+	var cfg Config
+	if err := env.Parse(&cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}

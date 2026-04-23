@@ -1,0 +1,58 @@
+// Package {{.ModuleName}} implements the {{.ModuleTitle}} domain module.
+package {{.ModuleName}}
+{{- if or .HasTimeImport .HasJSONImport}}
+
+import (
+{{- if .HasTimeImport}}
+	"time"
+{{- end}}
+{{- if .HasJSONImport}}
+	"encoding/json"
+{{- end}}
+)
+{{- end}}
+
+// Entity is the domain representation of a {{.ModuleTitle}}.
+type Entity struct {
+{{- range .Fields}}
+	{{.GoName}} {{.EntityType}}
+{{- end}}
+}
+
+// View is the public API representation of a {{.ModuleTitle}}.
+type View struct {
+{{- range .Fields}}
+	{{.GoName}} {{.ViewType}} `json:"{{.JSONTag}}"`
+{{- end}}
+}
+
+// ToView converts the entity to its API representation.
+func (e *Entity) ToView() View {
+	v := View{
+{{- range .Fields}}
+{{- if .ViewIsString}}
+{{- if .IsPointerNullable}}
+{{- /* handled below with nil check */}}
+{{- else}}
+		{{.GoName}}: e.{{.GoName}}.Format(time.RFC3339),
+{{- end}}
+{{- else if .IsNullableScalar}}
+{{- /* handled below with nil check */}}
+{{- else}}
+		{{.GoName}}: e.{{.GoName}},
+{{- end}}
+{{- end}}
+	}
+{{- range .Fields}}
+{{- if and .ViewIsString .IsPointerNullable}}
+	if e.{{.GoName}} != nil {
+		v.{{.GoName}} = e.{{.GoName}}.Format(time.RFC3339)
+	}
+{{- else if .IsNullableScalar}}
+	if e.{{.GoName}} != nil {
+		v.{{.GoName}} = *e.{{.GoName}}
+	}
+{{- end}}
+{{- end}}
+	return v
+}

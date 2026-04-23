@@ -1,0 +1,64 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
+	"{{.ModulePath}}/internal/core/config"
+	"{{.ModulePath}}/internal/middleware"
+)
+
+func main() {
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Fatal("config", zap.Error(err))
+	}
+
+	r := gin.New()
+	r.Use(middleware.Logger(logger))
+	r.Use(middleware.ErrorHandler())
+
+	v1 := r.Group("/api/v1")
+
+	// TODO: wire your modules here.
+	// Example:
+	//   userRepo    := user.NewRepository(pool)
+	//   userService := user.NewService(userRepo)
+	//   userHandler := user.NewHandler(userService)
+	//   user.RegisterRoutes(v1, userHandler, middleware.Auth(userRepo))
+	_ = v1
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.Port),
+		Handler: r,
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		logger.Info("server started", zap.Int("port", cfg.Port))
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Fatal("listen", zap.Error(err))
+		}
+	}()
+
+	<-ctx.Done()
+	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutCtx); err != nil {
+		logger.Error("shutdown", zap.Error(err))
+	}
+	logger.Info("server stopped")
+}

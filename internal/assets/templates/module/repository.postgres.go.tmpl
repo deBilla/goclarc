@@ -1,0 +1,95 @@
+package {{.ModuleName}}
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"{{.ModulePath}}/internal/db/sqlcdb"
+)
+
+// Repository defines the data-access contract for the {{.ModuleTitle}} domain.
+type Repository interface {
+	Create(ctx context.Context, p CreateParams) (*Entity, error)
+	GetByID(ctx context.Context, id string) (*Entity, error)
+	List(ctx context.Context) ([]*Entity, error)
+	Update(ctx context.Context, p UpdateParams) (*Entity, error)
+	Delete(ctx context.Context, id string) error
+}
+
+type repository struct {
+	q *sqlcdb.Queries
+}
+
+// NewRepository constructs a Repository backed by the given pgxpool.Pool.
+func NewRepository(pool *pgxpool.Pool) Repository {
+	return &repository{q: sqlcdb.New(pool)}
+}
+
+func (r *repository) Create(ctx context.Context, p CreateParams) (*Entity, error) {
+	row, err := r.q.Create{{.ModuleTitle}}(ctx, sqlcdb.Create{{.ModuleTitle}}Params{
+{{- range .CreateFields}}
+		{{.GoName}}: p.{{.GoName}},
+{{- end}}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.Create: %w", err)
+	}
+	return rowToEntity(row), nil
+}
+
+func (r *repository) GetByID(ctx context.Context, id string) (*Entity, error) {
+	row, err := r.q.Get{{.ModuleTitle}}ByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("{{.ModuleName}} not found")
+		}
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.GetByID: %w", err)
+	}
+	return rowToEntity(row), nil
+}
+
+func (r *repository) List(ctx context.Context) ([]*Entity, error) {
+	rows, err := r.q.List{{.ModuleTitle}}s(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.List: %w", err)
+	}
+	entities := make([]*Entity, len(rows))
+	for i, row := range rows {
+		entities[i] = rowToEntity(row)
+	}
+	return entities, nil
+}
+
+func (r *repository) Update(ctx context.Context, p UpdateParams) (*Entity, error) {
+	row, err := r.q.Update{{.ModuleTitle}}(ctx, sqlcdb.Update{{.ModuleTitle}}Params{
+		ID: p.ID,
+{{- range .UpdateFields}}
+		{{.GoName}}: p.{{.GoName}},
+{{- end}}
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("{{.ModuleName}} not found")
+		}
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.Update: %w", err)
+	}
+	return rowToEntity(row), nil
+}
+
+func (r *repository) Delete(ctx context.Context, id string) error {
+	if err := r.q.Delete{{.ModuleTitle}}(ctx, id); err != nil {
+		return fmt.Errorf("{{.ModuleName}}.repository.Delete: %w", err)
+	}
+	return nil
+}
+
+func rowToEntity(row sqlcdb.{{.ModuleTitle}}) *Entity {
+	return &Entity{
+{{- range .Fields}}
+		{{.GoName}}: row.{{.GoName}},
+{{- end}}
+	}
+}
