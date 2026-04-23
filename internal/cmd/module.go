@@ -29,6 +29,7 @@ var (
 	moduleMigrationDir string
 	moduleForce        bool
 	moduleDryRun       bool
+	moduleReset        bool
 	moduleModPath      string
 )
 
@@ -40,6 +41,7 @@ func init() {
 	moduleCmd.Flags().StringVar(&moduleMigrationDir, "migration-dir", "db/migrations", "directory for generated CREATE TABLE migration (postgres only)")
 	moduleCmd.Flags().BoolVarP(&moduleForce, "force", "f", false, "overwrite existing files")
 	moduleCmd.Flags().BoolVar(&moduleDryRun, "dry-run", false, "print generated files to stdout without writing")
+	moduleCmd.Flags().BoolVar(&moduleReset, "reset", false, "delete all files previously generated for this module")
 	moduleCmd.Flags().StringVar(&moduleModPath, "module-path", "", "Go module path (detected from go.mod if omitted)")
 	_ = moduleCmd.MarkFlagRequired("schema")
 }
@@ -69,11 +71,28 @@ func runModule(cmd *cobra.Command, args []string) error {
 		outDir = filepath.Join("internal", "modules", modName)
 	}
 
+	files := moduleFiles(ctx, modName, outDir)
+
+	if moduleReset {
+		return resetModule(files, outDir)
+	}
+
 	tmpl, err := parseModuleTemplates()
 	if err != nil {
 		return err
 	}
 
+	opts := gen.RenderOptions{DryRun: moduleDryRun, Force: moduleForce}
+
+	if !moduleDryRun {
+		fmt.Printf("Generating module %q (db: %s) → %s\n", modName, moduleDB, outDir)
+	}
+
+	return gen.RenderFiles(tmpl, ctx, files, opts)
+}
+
+// moduleFiles returns the full list of files that would be generated for a module.
+func moduleFiles(ctx gen.TemplateContext, modName, outDir string) []gen.File {
 	repoTmpl := "repository." + moduleDB + ".go.tmpl"
 
 	files := []gen.File{
@@ -86,23 +105,45 @@ func runModule(cmd *cobra.Command, args []string) error {
 	}
 
 	if moduleDB == "postgres" {
-		files = append(files, gen.File{
-			TemplateName: "query.sql.tmpl",
-			OutputPath:   filepath.Join(moduleQueryDir, modName+"s.sql"),
-		})
-		files = append(files, gen.File{
-			TemplateName: "migration.sql.tmpl",
-			OutputPath:   filepath.Join(moduleMigrationDir, "001_create_"+ctx.TableName+".sql"),
-		})
+		files = append(files,
+			gen.File{
+				TemplateName: "query.sql.tmpl",
+				OutputPath:   filepath.Join(moduleQueryDir, modName+"s.sql"),
+			},
+			gen.File{
+				TemplateName: "migration.sql.tmpl",
+				OutputPath:   filepath.Join(moduleMigrationDir, "001_create_"+ctx.TableName+".sql"),
+			},
+		)
 	}
 
-	opts := gen.RenderOptions{DryRun: moduleDryRun, Force: moduleForce}
+	return files
+}
 
-	if !moduleDryRun {
-		fmt.Printf("Generating module %q (db: %s) → %s\n", modName, moduleDB, outDir)
+// resetModule deletes all generated files for a module and removes the module
+// directory if it is empty afterwards.
+func resetModule(files []gen.File, outDir string) error {
+	fmt.Printf("Resetting module → removing generated files\n")
+	for _, f := range files {
+		if err := os.Remove(f.OutputPath); err != nil {
+			if os.IsNotExist(err) {
+				fmt.Printf("  skipped  %s (not found)\n", f.OutputPath)
+				continue
+			}
+			return fmt.Errorf("reset: remove %s: %w", f.OutputPath, err)
+		}
+		fmt.Printf("  removed  %s\n", f.OutputPath)
 	}
 
-	return gen.RenderFiles(tmpl, ctx, files, opts)
+	// Remove the module directory if empty.
+	entries, err := os.ReadDir(outDir)
+	if err == nil && len(entries) == 0 {
+		if err := os.Remove(outDir); err == nil {
+			fmt.Printf("  removed  %s/\n", outDir)
+		}
+	}
+
+	return nil
 }
 
 func parseModuleTemplates() (*template.Template, error) {
