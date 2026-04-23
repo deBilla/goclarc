@@ -7,7 +7,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"{{.ModulePath}}/internal/db/sqlcdb"
 )
 
 // Repository defines the data-access contract for the {{.ModuleTitle}} domain.
@@ -20,76 +19,116 @@ type Repository interface {
 }
 
 type repository struct {
-	q *sqlcdb.Queries
+	pool *pgxpool.Pool
 }
 
 // NewRepository constructs a Repository backed by the given pgxpool.Pool.
 func NewRepository(pool *pgxpool.Pool) Repository {
-	return &repository{q: sqlcdb.New(pool)}
+	return &repository{pool: pool}
 }
 
 func (r *repository) Create(ctx context.Context, p CreateParams) (*Entity, error) {
-	row, err := r.q.Create{{.ModuleTitle}}(ctx, sqlcdb.Create{{.ModuleTitle}}Params{
-{{- range .CreateFields}}
-		{{.GoName}}: p.{{.GoName}},
-{{- end}}
-	})
+	row := r.pool.QueryRow(ctx,
+		`INSERT INTO {{.TableName}} ({{.InsertColumns}})
+		 VALUES ({{.InsertPlaceholders}})
+		 RETURNING {{.SelectColumns}}`,
+		{{- range .CreateFields}}
+		p.{{.GoName}},
+		{{- end}}
+	)
+	entity, err := scanEntity(row)
 	if err != nil {
 		return nil, fmt.Errorf("{{.ModuleName}}.repository.Create: %w", err)
 	}
-	return rowToEntity(row), nil
+	return entity, nil
 }
 
 func (r *repository) GetByID(ctx context.Context, id string) (*Entity, error) {
-	row, err := r.q.Get{{.ModuleTitle}}ByID(ctx, id)
+	row := r.pool.QueryRow(ctx,
+		`SELECT {{.SelectColumns}} FROM {{.TableName}} WHERE id = $1`,
+		id,
+	)
+	entity, err := scanEntity(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("{{.ModuleName}} not found")
 		}
 		return nil, fmt.Errorf("{{.ModuleName}}.repository.GetByID: %w", err)
 	}
-	return rowToEntity(row), nil
+	return entity, nil
 }
 
 func (r *repository) List(ctx context.Context) ([]*Entity, error) {
-	rows, err := r.q.List{{.ModuleTitle}}s(ctx)
+	rows, err := r.pool.Query(ctx,
+		`SELECT {{.SelectColumns}} FROM {{.TableName}} ORDER BY created_at DESC`,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("{{.ModuleName}}.repository.List: %w", err)
 	}
-	entities := make([]*Entity, len(rows))
-	for i, row := range rows {
-		entities[i] = rowToEntity(row)
+	defer rows.Close()
+
+	var entities []*Entity
+	for rows.Next() {
+		entity, err := scanEntity(rows)
+		if err != nil {
+			return nil, fmt.Errorf("{{.ModuleName}}.repository.List scan: %w", err)
+		}
+		entities = append(entities, entity)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.List rows: %w", err)
 	}
 	return entities, nil
 }
 
 func (r *repository) Update(ctx context.Context, p UpdateParams) (*Entity, error) {
-	row, err := r.q.Update{{.ModuleTitle}}(ctx, sqlcdb.Update{{.ModuleTitle}}Params{
-		ID: p.ID,
-{{- range .UpdateFields}}
-		{{.GoName}}: p.{{.GoName}},
-{{- end}}
-	})
+	row := r.pool.QueryRow(ctx,
+		`UPDATE {{.TableName}} SET
+		  {{.UpdateSetClause}}
+		 WHERE id = $1
+		 RETURNING {{.SelectColumns}}`,
+		p.ID,
+		{{- range .UpdateFields}}
+		p.{{.GoName}},
+		{{- end}}
+	)
+	entity, err := scanEntity(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("{{.ModuleName}} not found")
 		}
 		return nil, fmt.Errorf("{{.ModuleName}}.repository.Update: %w", err)
 	}
-	return rowToEntity(row), nil
+	return entity, nil
 }
 
 func (r *repository) Delete(ctx context.Context, id string) error {
-	if err := r.q.Delete{{.ModuleTitle}}(ctx, id); err != nil {
+	tag, err := r.pool.Exec(ctx,
+		`DELETE FROM {{.TableName}} WHERE id = $1`, id,
+	)
+	if err != nil {
 		return fmt.Errorf("{{.ModuleName}}.repository.Delete: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("{{.ModuleName}} not found")
 	}
 	return nil
 }
 
-func rowToEntity(row sqlcdb.{{.ModuleTitle}}) *Entity {
-	return &Entity{
-{{- range .Fields}}
-		{{.GoName}}: row.{{.GoName}},
-{{- end}}
+// scanner is satisfied by both pgx.Row and pgx.Rows.
+type scanner interface {
+	Scan(dest ...any) error
+}
+
+func scanEntity(s scanner) (*Entity, error) {
+	var e Entity
+	err := s.Scan(
+		{{- range .Fields}}
+		&e.{{.GoName}},
+		{{- end}}
+	)
+	if err != nil {
+		return nil, err
 	}
+	return &e, nil
 }

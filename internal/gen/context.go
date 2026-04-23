@@ -1,6 +1,9 @@
 package gen
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/deBilla/goclarc/internal/schema"
 )
 
@@ -64,6 +67,12 @@ type TemplateContext struct {
 
 	HasTimeImport bool
 	HasJSONImport bool
+
+	// PostgreSQL raw-query helpers (populated only for the postgres adapter).
+	InsertColumns      string // "email, name, age"
+	InsertPlaceholders string // "$1, $2, $3"
+	SelectColumns      string // "id, email, name, age, created_at"
+	UpdateSetClause    string // "email = COALESCE($2, email), ..."
 }
 
 // Build assembles a TemplateContext from a parsed schema and a DB adapter.
@@ -132,6 +141,24 @@ func Build(s *schema.Schema, adapter schema.Adapter, modulePath, moduleName stri
 		if !f.Auto && !f.Primary {
 			ctx.UpdateFields = append(ctx.UpdateFields, fc)
 		}
+	}
+
+	if adapter.Name() == "postgres" {
+		var insertCols, insertPlaceholders, selectCols, updateSet []string
+		for i, f := range ctx.CreateFields {
+			insertCols = append(insertCols, f.Name)
+			insertPlaceholders = append(insertPlaceholders, fmt.Sprintf("$%d", i+1))
+		}
+		for _, f := range ctx.Fields {
+			selectCols = append(selectCols, f.Name)
+		}
+		for i, f := range ctx.UpdateFields {
+			updateSet = append(updateSet, fmt.Sprintf("%s = COALESCE($%d, %s)", f.Name, i+2, f.Name))
+		}
+		ctx.InsertColumns = strings.Join(insertCols, ", ")
+		ctx.InsertPlaceholders = strings.Join(insertPlaceholders, ", ")
+		ctx.SelectColumns = strings.Join(selectCols, ", ")
+		ctx.UpdateSetClause = strings.Join(updateSet, ",\n\t\t  ")
 	}
 
 	return ctx
