@@ -6,12 +6,13 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	apperr "{{.ModulePath}}/internal/core/errors"
 )
 
-// ErrorHandler maps errors added via c.Error() to JSON responses.
-func ErrorHandler() gin.HandlerFunc {
+// ErrorHandler maps errors added via c.Error() to JSON responses and logs them.
+func ErrorHandler(log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
 		if len(c.Errors) == 0 {
@@ -23,6 +24,12 @@ func ErrorHandler() gin.HandlerFunc {
 		if errors.As(err, &appErr) {
 			status := apperr.HTTPStatus(appErr)
 			code := strings.ToUpper(strings.ReplaceAll(appErr.Cause.Error(), " ", "_"))
+			log.Warn("app error",
+				zap.String("code", code),
+				zap.String("message", appErr.Message),
+				zap.Int("status", status),
+				zap.String("path", c.Request.URL.Path),
+			)
 			c.JSON(status, gin.H{
 				"success": false,
 				"error":   gin.H{"code": code, "message": appErr.Message},
@@ -32,6 +39,10 @@ func ErrorHandler() gin.HandlerFunc {
 
 		msg := err.Error()
 		if strings.Contains(msg, "not found") {
+			log.Warn("not found",
+				zap.String("error", msg),
+				zap.String("path", c.Request.URL.Path),
+			)
 			c.JSON(http.StatusNotFound, gin.H{
 				"success": false,
 				"error":   gin.H{"code": "NOT_FOUND", "message": msg},
@@ -39,6 +50,10 @@ func ErrorHandler() gin.HandlerFunc {
 			return
 		}
 
+		log.Error("internal error",
+			zap.String("error", msg),
+			zap.String("path", c.Request.URL.Path),
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   gin.H{"code": "INTERNAL_ERROR", "message": msg},
