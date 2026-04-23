@@ -30,9 +30,18 @@ func ErrorHandler() gin.HandlerFunc {
 			return
 		}
 
+		msg := err.Error()
+		if strings.Contains(msg, "not found") {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   gin.H{"code": "NOT_FOUND", "message": msg},
+			})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   gin.H{"code": "INTERNAL_ERROR", "message": "an unexpected error occurred"},
+			"error":   gin.H{"code": "INTERNAL_ERROR", "message": msg},
 		})
 	}
 }
