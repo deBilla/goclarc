@@ -34,6 +34,9 @@ type FieldContext struct {
 	// IsNullableScalar is true when the entity field is a pointer (*T) but the
 	// view field is a non-pointer (T), requiring a nil-guarded dereference in ToView.
 	IsNullableScalar bool
+	// IsLast is true for the final field in the Fields slice — used in templates
+	// that need to suppress a trailing comma (e.g. SQL CREATE TABLE).
+	IsLast bool
 	// BindingTag is the Gin binding tag (e.g. `binding:"required"`).
 	BindingTag string
 }
@@ -110,6 +113,11 @@ func Build(s *schema.Schema, adapter schema.Adapter, modulePath, moduleName stri
 		}
 
 		ctx.Fields = append(ctx.Fields, fc)
+		// Mark previous field as no longer last.
+		if len(ctx.Fields) > 1 {
+			ctx.Fields[len(ctx.Fields)-2].IsLast = false
+		}
+		ctx.Fields[len(ctx.Fields)-1].IsLast = true
 
 		if info.NeedsTimeImport {
 			ctx.HasTimeImport = true

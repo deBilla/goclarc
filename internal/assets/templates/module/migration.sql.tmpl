@@ -1,0 +1,37 @@
+CREATE TABLE {{.TableName}} (
+{{- range .Fields}}
+{{- if .IsPrimary}}
+    {{.Name}} UUID PRIMARY KEY DEFAULT gen_random_uuid(){{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "string"}}
+    {{.Name}} TEXT{{if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "*string"}}
+    {{.Name}} TEXT{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "int32"}}
+    {{.Name}} INT{{if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "*int32"}}
+    {{.Name}} INT{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "int64"}}
+    {{.Name}} BIGINT{{if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "*int64"}}
+    {{.Name}} BIGINT{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "float64"}}
+    {{.Name}} DOUBLE PRECISION{{if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "*float64"}}
+    {{.Name}} DOUBLE PRECISION{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "bool"}}
+    {{.Name}} BOOLEAN{{if .IsRequired}} NOT NULL{{end}} DEFAULT false{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "*bool"}}
+    {{.Name}} BOOLEAN{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "time.Time"}}
+    {{.Name}} TIMESTAMPTZ{{if .IsAuto}} NOT NULL DEFAULT now(){{else if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "*time.Time"}}
+    {{.Name}} TIMESTAMPTZ{{if .IsAuto}} DEFAULT now(){{end}}{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "json.RawMessage"}}
+    {{.Name}} JSONB{{if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
+{{- else if eq .EntityType "[]string"}}
+    {{.Name}} TEXT[]{{if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
+{{- else}}
+    {{.Name}} TEXT{{if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
+{{- end}}
+{{- end}}
+);

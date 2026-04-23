@@ -22,13 +22,14 @@ var moduleCmd = &cobra.Command{
 }
 
 var (
-	moduleSchema   string
-	moduleDB       string
-	moduleOutDir   string
-	moduleQueryDir string
-	moduleForce    bool
-	moduleDryRun   bool
-	moduleModPath  string
+	moduleSchema       string
+	moduleDB           string
+	moduleOutDir       string
+	moduleQueryDir     string
+	moduleMigrationDir string
+	moduleForce        bool
+	moduleDryRun       bool
+	moduleModPath      string
 )
 
 func init() {
@@ -36,6 +37,7 @@ func init() {
 	moduleCmd.Flags().StringVar(&moduleDB, "db", "postgres", "database adapter: postgres | mongo | rtdb")
 	moduleCmd.Flags().StringVarP(&moduleOutDir, "out-dir", "o", "", "output directory (default: internal/modules/<name>)")
 	moduleCmd.Flags().StringVar(&moduleQueryDir, "query-dir", "schemas/queries", "directory for generated .sql file (postgres only)")
+	moduleCmd.Flags().StringVar(&moduleMigrationDir, "migration-dir", "db/migrations", "directory for generated CREATE TABLE migration (postgres only)")
 	moduleCmd.Flags().BoolVarP(&moduleForce, "force", "f", false, "overwrite existing files")
 	moduleCmd.Flags().BoolVar(&moduleDryRun, "dry-run", false, "print generated files to stdout without writing")
 	moduleCmd.Flags().StringVar(&moduleModPath, "module-path", "", "Go module path (detected from go.mod if omitted)")
@@ -87,6 +89,10 @@ func runModule(cmd *cobra.Command, args []string) error {
 		files = append(files, gen.File{
 			TemplateName: "query.sql.tmpl",
 			OutputPath:   filepath.Join(moduleQueryDir, modName+"s.sql"),
+		})
+		files = append(files, gen.File{
+			TemplateName: "migration.sql.tmpl",
+			OutputPath:   filepath.Join(moduleMigrationDir, "001_create_"+ctx.TableName+".sql"),
 		})
 	}
 
