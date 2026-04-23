@@ -103,6 +103,7 @@ Generating module "user" (db: postgres) → internal/modules/user
   created  internal/modules/user/handler.go
   created  internal/modules/user/routes.go
   created  schemas/queries/users.sql
+  created  db/migrations/001_create_users.sql
 ```
 
 ## 4. Preview Before Writing
@@ -140,26 +141,15 @@ userHandler := user.NewHandler(userService)
 user.RegisterRoutes(v1, userHandler, middleware.Auth())
 ```
 
-## 6. Set Up sqlc (PostgreSQL)
+## 6. Apply the Migration
 
-goclarc wrote a SQL file at `schemas/queries/users.sql`. To generate the Go database layer:
+goclarc generated a `CREATE TABLE` statement at `db/migrations/001_create_users.sql`. Apply it to your database before starting the server:
 
-1. Install sqlc: `go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`
-2. Create `sqlc.yaml`:
-
-```yaml title="sqlc.yaml"
-version: "2"
-sql:
-  - engine: postgresql
-    queries: schemas/queries/
-    schema: db/migrations/
-    gen:
-      go:
-        package: sqlcdb
-        out: internal/db/sqlcdb
+```bash
+psql $DATABASE_URL -f db/migrations/001_create_users.sql
 ```
 
-3. Run: `sqlc generate`
+The generated `repository.go` uses pgx/v5 directly with raw SQL — no sqlc setup or code generation step is needed.
 
 ## 7. Run the Server
 

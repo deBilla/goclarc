@@ -10,119 +10,71 @@ goclarc module user --db postgres --schema schemas/user.yaml
 
 ## What Gets Generated
 
-In addition to the standard 6 module files, the Postgres adapter generates a SQL query file:
+In addition to the standard 6 module files, the Postgres adapter generates two extra files:
 
 ```
-internal/modules/user/repository.go   ← pgxpool + sqlcdb implementation
-schemas/queries/users.sql             ← sqlc-annotated CRUD queries
+internal/modules/user/repository.go   ← pgxpool raw-query implementation
+schemas/queries/users.sql             ← CRUD SQL for reference / future use
+db/migrations/001_create_users.sql    ← CREATE TABLE migration (auto-generated)
 ```
 
 ## Repository Pattern
 
-The generated repository uses [sqlc](https://sqlc.dev/) for type-safe queries and [pgx/v5](https://github.com/jackc/pgx) for the database driver:
+The generated repository uses [pgx/v5](https://github.com/jackc/pgx) directly — no sqlc or ORM dependency. All CRUD queries are embedded as raw SQL strings.
 
 ```go
 type repository struct {
-    q *sqlcdb.Queries
+    pool *pgxpool.Pool
 }
 
 func NewRepository(pool *pgxpool.Pool) Repository {
-    return &repository{q: sqlcdb.New(pool)}
+    return &repository{pool: pool}
 }
 
 func (r *repository) GetByID(ctx context.Context, id string) (*Entity, error) {
-    row, err := r.q.GetUserByID(ctx, id)
+    row := r.pool.QueryRow(ctx,
+        `SELECT id, email, name, created_at FROM users WHERE id = $1`,
+        id,
+    )
+    entity, err := scanEntity(row)
     if err != nil {
         if errors.Is(err, pgx.ErrNoRows) {
             return nil, fmt.Errorf("user not found")
         }
         return nil, fmt.Errorf("user.repository.GetByID: %w", err)
     }
-    return rowToEntity(row), nil
+    return entity, nil
 }
 ```
 
-## Setting Up sqlc
+pgx/v5 natively scans UUIDs to `string`, `TIMESTAMPTZ` to `time.Time`, and `NULL` columns to pointer types (`*string`, `*int32`, etc.) — no intermediate helper types required.
 
-goclarc writes the SQL query file. You still need to run sqlc to generate the Go database layer.
+## Migration File
 
-**1. Install sqlc:**
+goclarc automatically generates a `CREATE TABLE` migration alongside your module:
+
+```sql title="db/migrations/001_create_users.sql"
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL,
+    name TEXT NOT NULL,
+    age INT,
+    is_active BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+The migration directory defaults to `db/migrations/`. Override it with `--migration-dir`:
 
 ```bash
-go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-```
-
-**2. Create `sqlc.yaml` in your project root:**
-
-```yaml
-version: "2"
-sql:
-  - engine: postgresql
-    queries: schemas/queries/
-    schema: db/migrations/
-    gen:
-      go:
-        package: sqlcdb
-        out: internal/db/sqlcdb
-        sql_package: pgx/v5
-```
-
-**3. Add your schema migrations to `db/migrations/`** (the table DDL that matches your YAML fields).
-
-**4. Generate:**
-
-```bash
-sqlc generate
-```
-
-This creates `internal/db/sqlcdb/` with the `Queries` struct that the generated repository uses.
-
-## Generated SQL File
-
-For a `user` module with `email`, `name`, `age`, `is_active` fields, the generated `schemas/queries/users.sql` looks like:
-
-```sql
--- name: CreateUser :one
-INSERT INTO users (
-  email,
-  name,
-  age,
-  is_active
-) VALUES (
-  @email,
-  @name,
-  @age,
-  @is_active
-)
-RETURNING *;
-
--- name: GetUserByID :one
-SELECT * FROM users
-WHERE id = @id
-LIMIT 1;
-
--- name: ListUsers :many
-SELECT * FROM users
-ORDER BY created_at DESC;
-
--- name: UpdateUser :one
-UPDATE users
-SET
-  email = COALESCE(@email, email),
-  name = COALESCE(@name, name),
-  age = COALESCE(@age, age),
-  is_active = COALESCE(@is_active, is_active)
-WHERE id = @id
-RETURNING *;
-
--- name: DeleteUser :exec
-DELETE FROM users
-WHERE id = @id;
+goclarc module user --db postgres --schema schemas/user.yaml \
+  --migration-dir supabase/migrations
 ```
 
 ## Required Imports
 
-The generated repository imports:
+The generated repository only needs:
 
 ```go
 import (
@@ -132,15 +84,27 @@ import (
 
     "github.com/jackc/pgx/v5"
     "github.com/jackc/pgx/v5/pgxpool"
-    "your-module/internal/db/sqlcdb"
 )
 ```
 
-Add these dependencies:
+Add the pgx dependency:
 
 ```bash
 go get github.com/jackc/pgx/v5
-go get github.com/sqlc-dev/sqlc/cmd/sqlc
+```
+
+No sqlc installation or code generation step is required.
+
+## Update Pattern
+
+Updates use `COALESCE` so only provided fields are changed — `nil` pointer fields leave the DB column unchanged:
+
+```sql
+UPDATE users SET
+  email = COALESCE($2, email),
+  name  = COALESCE($3, name)
+WHERE id = $1
+RETURNING id, email, name, created_at
 ```
 
 ## Connection Setup

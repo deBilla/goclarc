@@ -8,7 +8,7 @@ This page explains what each generated file does and what you're expected to mod
 
 ## File Overview
 
-For `goclarc module user --db postgres`, six files are generated:
+For `goclarc module user --db postgres`, six Go files and two SQL files are generated:
 
 ```
 internal/modules/user/
@@ -18,6 +18,10 @@ internal/modules/user/
   service.go
   handler.go
   routes.go
+schemas/queries/
+  users.sql
+db/migrations/
+  001_create_users.sql
 ```
 
 ---
@@ -54,7 +58,7 @@ func (e *Entity) ToView() View {
 }
 ```
 
-**What you might add:** Extra computed fields in `ToView()`, additional view types (e.g., `ToOwnerView()` with extra sensitive fields).
+**What you might add:** Extra computed fields in `ToView()`, additional view types (e.g., `ToOwnerView()` with sensitive fields).
 
 ---
 
@@ -83,7 +87,7 @@ type UpdateRequest struct {
 
 ## `repository.go`
 
-Defines the data access contract (interface) and the DB-specific implementation.
+Defines the data access contract (interface) and the pgx implementation.
 
 ```go
 // Repository — the interface your service depends on.
@@ -96,8 +100,14 @@ type Repository interface {
 }
 
 // repository — the concrete implementation (unexported).
-type repository struct { q *sqlcdb.Queries }
+type repository struct {
+    pool *pgxpool.Pool
+}
 ```
+
+Queries are raw SQL strings embedded directly in the repository. pgx/v5 scans results into `Entity` fields via a shared `scanEntity` helper that accepts both `pgx.Row` and `pgx.Rows`.
+
+Not-found cases return a `"<module> not found"` error, which the error middleware automatically maps to a 404 response.
 
 **What you might add:** Additional query methods (e.g., `ListByEmail`, `GetByUserID`), pagination parameters to `List`.
 
@@ -167,6 +177,36 @@ func RegisterRoutes(rg *gin.RouterGroup, h *Handler, middlewares ...gin.HandlerF
 
 ---
 
+## `schemas/queries/users.sql`
+
+A reference SQL file with all CRUD queries for your table. Useful as a starting point if you later add custom queries to the repository.
+
+---
+
+## `db/migrations/001_create_<table>.sql`
+
+A `CREATE TABLE` statement derived from your schema fields. Apply it to your database before running the server:
+
+```bash
+psql $DATABASE_URL -f db/migrations/001_create_users.sql
+```
+
+---
+
+## Error Responses
+
+The generated error middleware (`internal/middleware/error.go`) maps errors to HTTP responses automatically:
+
+| Situation | Status | Response |
+|---|---|---|
+| `AppError` (typed sentinel) | varies | `{"success":false,"error":{"code":"...","message":"..."}}` |
+| Error message contains `"not found"` | 404 | `{"success":false,"error":{"code":"NOT_FOUND","message":"..."}}` |
+| Any other error | 500 | `{"success":false,"error":{"code":"INTERNAL_ERROR","message":"..."}}` |
+
+The actual error message is always included — you'll never see a generic `"an unexpected error occurred"` in the response.
+
+---
+
 ## Regenerating
 
 Use `--force` to overwrite existing files after changing a schema:
@@ -175,6 +215,12 @@ Use `--force` to overwrite existing files after changing a schema:
 goclarc module user --db postgres --schema schemas/user.yaml --force
 ```
 
+Use `--reset` to delete all generated files and start clean:
+
+```bash
+goclarc module user --db postgres --schema schemas/user.yaml --reset
+```
+
 :::caution
-`--force` overwrites generated files. Any custom additions (business logic in `service.go`, extra queries in `repository.go`) will be lost. Consider using `--dry-run` first and applying changes manually.
+Both `--force` and `--reset` overwrite or delete generated files. Any custom additions (business logic in `service.go`, extra queries in `repository.go`) will be lost. Use `--dry-run` first to review what would change.
 :::

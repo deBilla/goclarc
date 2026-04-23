@@ -26,8 +26,10 @@ goclarc module [name] [flags]
 | `--db` | | `postgres` | Database adapter: `postgres` \| `mongo` \| `rtdb` |
 | `--out-dir` | `-o` | `internal/modules/<name>` | Output directory for generated Go files |
 | `--query-dir` | | `schemas/queries` | Directory for the generated `.sql` file (postgres only) |
+| `--migration-dir` | | `db/migrations` | Directory for the generated `CREATE TABLE` migration (postgres only) |
 | `--force` | `-f` | `false` | Overwrite existing files without prompting |
 | `--dry-run` | | `false` | Print generated output to stdout — write nothing |
+| `--reset` | | `false` | Delete all files previously generated for this module |
 | `--module-path` | | *(from go.mod)* | Go module path for import statements |
 
 ## Examples
@@ -45,12 +47,16 @@ goclarc module settings --db rtdb --schema schemas/settings.yaml
 # Preview without writing
 goclarc module user --db postgres --schema schemas/user.yaml --dry-run
 
-# Custom output directory
+# Custom output and migration directories
 goclarc module user --db postgres --schema schemas/user.yaml \
-  --out-dir pkg/modules/user
+  --out-dir pkg/modules/user \
+  --migration-dir supabase/migrations
 
-# Overwrite existing files
+# Overwrite existing files after schema changes
 goclarc module user --db postgres --schema schemas/user.yaml --force
+
+# Remove all generated files for a module
+goclarc module user --db postgres --schema schemas/user.yaml --reset
 ```
 
 ## Generated Files
@@ -61,13 +67,29 @@ For `goclarc module user --db postgres`:
 internal/modules/user/
   entity.go       ← Entity struct, View struct, ToView()
   dto.go          ← CreateRequest, UpdateRequest, CreateParams, UpdateParams
-  repository.go   ← Repository interface + pgx implementation
+  repository.go   ← Repository interface + pgxpool raw-query implementation
   service.go      ← Service interface + implementation
   handler.go      ← Gin CRUD handlers (Create, GetByID, List, Update, Delete)
   routes.go       ← RegisterRoutes() wiring all 5 endpoints
 schemas/queries/
-  users.sql       ← sqlc CRUD query file (postgres only)
+  users.sql       ← CRUD SQL reference (postgres only)
+db/migrations/
+  001_create_users.sql  ← CREATE TABLE migration (postgres only)
 ```
+
+## Resetting a Module
+
+The `--reset` flag deletes every file that would have been generated for the module and removes the module directory if it becomes empty. Useful when you want to start fresh after renaming fields or changing the adapter:
+
+```bash
+# Remove all generated files, then regenerate with updated schema
+goclarc module user --db postgres --schema schemas/user.yaml --reset
+goclarc module user --db postgres --schema schemas/user.yaml
+```
+
+:::caution
+`--reset` permanently deletes files. Any custom business logic you added to `service.go` or extra queries in `repository.go` will be lost.
+:::
 
 ## Module Name vs Schema Module Field
 
