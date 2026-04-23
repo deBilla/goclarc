@@ -1,0 +1,27 @@
+{
+  "id": "adapters/postgres",
+  "title": "PostgreSQL Adapter",
+  "description": "What Gets Generated",
+  "source": "@site/docs/adapters/postgres.md",
+  "sourceDirName": "adapters",
+  "slug": "/adapters/postgres",
+  "permalink": "/goclarc/docs/adapters/postgres",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/deBilla/goclarc/edit/main/website/docs/adapters/postgres.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Field Types",
+    "permalink": "/goclarc/docs/schema/field-types"
+  },
+  "next": {
+    "title": "MongoDB Adapter",
+    "permalink": "/goclarc/docs/adapters/mongo"
+  }
+}

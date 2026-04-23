@@ -1,0 +1,24 @@
+{
+  "id": "intro",
+  "title": "What is goclarc?",
+  "description": "goclarc is a CLI tool that scaffolds production-ready Go APIs following Clean Architecture — similar to what @nestjs/cli does for TypeScript, but for Go.",
+  "source": "@site/docs/intro.md",
+  "sourceDirName": ".",
+  "slug": "/",
+  "permalink": "/goclarc/docs/",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/deBilla/goclarc/edit/main/website/docs/intro.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1,
+    "slug": "/"
+  },
+  "sidebar": "docsSidebar",
+  "next": {
+    "title": "Installation",
+    "permalink": "/goclarc/docs/installation"
+  }
+}

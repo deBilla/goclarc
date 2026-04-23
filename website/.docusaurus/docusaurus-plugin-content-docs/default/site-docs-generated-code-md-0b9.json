@@ -1,0 +1,27 @@
+{
+  "id": "generated-code",
+  "title": "Generated Code Guide",
+  "description": "This page explains what each generated file does and what you're expected to modify after generation.",
+  "source": "@site/docs/generated-code.md",
+  "sourceDirName": ".",
+  "slug": "/generated-code",
+  "permalink": "/goclarc/docs/generated-code",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/deBilla/goclarc/edit/main/website/docs/generated-code.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 8,
+  "frontMatter": {
+    "sidebar_position": 8
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Firebase RTDB Adapter",
+    "permalink": "/goclarc/docs/adapters/rtdb"
+  },
+  "next": {
+    "title": "Examples",
+    "permalink": "/goclarc/docs/examples"
+  }
+}

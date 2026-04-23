@@ -1,0 +1,45 @@
+/* goclarc brand colours — teal/cyan on dark */
+:root {
+  --ifm-color-primary: #00bcd4;
+  --ifm-color-primary-dark: #00acc1;
+  --ifm-color-primary-darker: #0097a7;
+  --ifm-color-primary-darkest: #00838f;
+  --ifm-color-primary-light: #26c6da;
+  --ifm-color-primary-lighter: #4dd0e1;
+  --ifm-color-primary-lightest: #80deea;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 188, 212, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #4dd0e1;
+  --ifm-color-primary-dark: #26c6da;
+  --ifm-color-primary-darker: #00bcd4;
+  --ifm-color-primary-darkest: #00acc1;
+  --ifm-color-primary-light: #80deea;
+  --ifm-color-primary-lighter: #b2ebf2;
+  --ifm-color-primary-lightest: #e0f7fa;
+  --docusaurus-highlighted-code-line-bg: rgba(77, 208, 225, 0.15);
+}
+
+/* Hero section styling */
+.hero--primary {
+  background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+}
+
+.hero__subtitle {
+  color: var(--ifm-color-primary-lighter);
+}
+
+/* Feature cards */
+.features {
+  display: flex;
+  align-items: center;
+  padding: 2rem 0;
+  width: 100%;
+}
+
+.featureSvg {
+  height: 200px;
+  width: 200px;
+}

@@ -1,0 +1,27 @@
+{
+  "id": "adapters/rtdb",
+  "title": "Firebase RTDB Adapter",
+  "description": "What Gets Generated",
+  "source": "@site/docs/adapters/rtdb.md",
+  "sourceDirName": "adapters",
+  "slug": "/adapters/rtdb",
+  "permalink": "/goclarc/docs/adapters/rtdb",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/deBilla/goclarc/edit/main/website/docs/adapters/rtdb.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "MongoDB Adapter",
+    "permalink": "/goclarc/docs/adapters/mongo"
+  },
+  "next": {
+    "title": "Generated Code Guide",
+    "permalink": "/goclarc/docs/generated-code"
+  }
+}

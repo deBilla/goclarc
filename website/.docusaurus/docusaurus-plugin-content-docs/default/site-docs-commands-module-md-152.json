@@ -1,0 +1,27 @@
+{
+  "id": "commands/module",
+  "title": "goclarc module",
+  "description": "Generate a typed Clean Architecture module from a YAML schema.",
+  "source": "@site/docs/commands/module.md",
+  "sourceDirName": "commands",
+  "slug": "/commands/module",
+  "permalink": "/goclarc/docs/commands/module",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/deBilla/goclarc/edit/main/website/docs/commands/module.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "goclarc new",
+    "permalink": "/goclarc/docs/commands/new"
+  },
+  "next": {
+    "title": "Schema Overview",
+    "permalink": "/goclarc/docs/schema/overview"
+  }
+}

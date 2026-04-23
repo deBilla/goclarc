@@ -1,0 +1,27 @@
+{
+  "id": "installation",
+  "title": "Installation",
+  "description": "Requirements",
+  "source": "@site/docs/installation.md",
+  "sourceDirName": ".",
+  "slug": "/installation",
+  "permalink": "/goclarc/docs/installation",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/deBilla/goclarc/edit/main/website/docs/installation.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "What is goclarc?",
+    "permalink": "/goclarc/docs/"
+  },
+  "next": {
+    "title": "Getting Started",
+    "permalink": "/goclarc/docs/getting-started"
+  }
+}

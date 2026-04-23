@@ -1,0 +1,27 @@
+{
+  "id": "schema/overview",
+  "title": "Schema Overview",
+  "description": "The schema YAML file is the single source of truth for a module. It defines the domain fields, their types, and constraints — goclarc reads it and generates all Go code consistently.",
+  "source": "@site/docs/schema/overview.md",
+  "sourceDirName": "schema",
+  "slug": "/schema/overview",
+  "permalink": "/goclarc/docs/schema/overview",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/deBilla/goclarc/edit/main/website/docs/schema/overview.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "goclarc module",
+    "permalink": "/goclarc/docs/commands/module"
+  },
+  "next": {
+    "title": "Field Types",
+    "permalink": "/goclarc/docs/schema/field-types"
+  }
+}

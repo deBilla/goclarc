@@ -1,0 +1,27 @@
+{
+  "id": "commands/new",
+  "title": "goclarc new",
+  "description": "Scaffold a new Clean Architecture Go project skeleton.",
+  "source": "@site/docs/commands/new.md",
+  "sourceDirName": "commands",
+  "slug": "/commands/new",
+  "permalink": "/goclarc/docs/commands/new",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/deBilla/goclarc/edit/main/website/docs/commands/new.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Getting Started",
+    "permalink": "/goclarc/docs/getting-started"
+  },
+  "next": {
+    "title": "goclarc module",
+    "permalink": "/goclarc/docs/commands/module"
+  }
+}
