@@ -14,7 +14,7 @@
 ## Install
 
 ```bash
-go install github.com/deBilla/goclarc@latest
+go install github.com/deBilla/goclarc/cmd/goclarc@latest
 ```
 
 Verify:

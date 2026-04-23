@@ -11,7 +11,7 @@ sidebar_position: 2
 ## Install
 
 ```bash
-go install github.com/deBilla/goclarc@latest
+go install github.com/deBilla/goclarc/cmd/goclarc@latest
 ```
 
 This downloads, compiles, and installs the `goclarc` binary to your `$GOPATH/bin` (or `$GOBIN`).
@@ -42,13 +42,13 @@ Available Commands:
 ## Install a Specific Version
 
 ```bash
-go install github.com/deBilla/goclarc@v0.1.0
+go install github.com/deBilla/goclarc/cmd/goclarc@v0.1.0
 ```
 
 ## Update
 
 ```bash
-go install github.com/deBilla/goclarc@latest
+go install github.com/deBilla/goclarc/cmd/goclarc@latest
 ```
 
 ## PATH Setup
