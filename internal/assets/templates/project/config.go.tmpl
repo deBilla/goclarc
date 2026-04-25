@@ -5,10 +5,13 @@ import "github.com/caarlos0/env/v11"
 
 // Config holds all runtime configuration for {{.ProjectName}}.
 type Config struct {
-	Port        int    `env:"PORT"         envDefault:"{{.Port}}"`
-	DatabaseURL string `env:"DATABASE_URL"  required:"true"`
-	RedisHost   string `env:"REDIS_HOST"    envDefault:"127.0.0.1"`
-	RedisPort   int    `env:"REDIS_PORT"    envDefault:"6379"`
+	Port int `env:"PORT" envDefault:"{{.Port}}"`
+{{- if eq .DBAdapter "rtdb"}}
+	DatabaseURL     string `env:"FIREBASE_DATABASE_URL" required:"true"`
+	CredentialsFile string `env:"FIREBASE_CREDENTIALS"  required:"true"`
+{{- else}}
+	DatabaseURL string `env:"DATABASE_URL" required:"true"`
+{{- end}}
 }
 
 // Load parses configuration from environment variables.

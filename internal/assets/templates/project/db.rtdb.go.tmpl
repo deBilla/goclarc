@@ -1,0 +1,30 @@
+// Package db initialises the Firebase Realtime Database client for {{.ProjectName}}.
+package db
+
+import (
+	"context"
+	"fmt"
+
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/db"
+	"google.golang.org/api/option"
+)
+
+// Connect initialises a Firebase app from credentialsFile and returns an RTDB
+// client scoped to databaseURL. The client is goroutine-safe and can be held
+// for the lifetime of the application.
+func Connect(ctx context.Context, credentialsFile, databaseURL string) (*db.Client, error) {
+	app, err := firebase.NewApp(ctx, &firebase.Options{
+		DatabaseURL: databaseURL,
+	}, option.WithCredentialsFile(credentialsFile))
+	if err != nil {
+		return nil, fmt.Errorf("db: init firebase app: %w", err)
+	}
+
+	client, err := app.Database(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("db: rtdb client: %w", err)
+	}
+
+	return client, nil
+}

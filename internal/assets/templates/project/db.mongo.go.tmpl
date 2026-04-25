@@ -1,0 +1,32 @@
+// Package db manages the MongoDB client for {{.ProjectName}}.
+package db
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+)
+
+// Connect opens a MongoDB connection to uri and verifies it with a ping.
+// Call client.Disconnect(ctx) when the application exits.
+func Connect(ctx context.Context, uri string) (*mongo.Client, error) {
+	opts := options.Client().
+		ApplyURI(uri).
+		SetConnectTimeout(10 * time.Second).
+		SetServerSelectionTimeout(5 * time.Second)
+
+	client, err := mongo.Connect(opts)
+	if err != nil {
+		return nil, fmt.Errorf("db: connect: %w", err)
+	}
+
+	if err := client.Ping(ctx, nil); err != nil {
+		_ = client.Disconnect(ctx)
+		return nil, fmt.Errorf("db: ping: %w", err)
+	}
+
+	return client, nil
+}

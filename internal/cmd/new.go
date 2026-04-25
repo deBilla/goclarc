@@ -21,23 +21,32 @@ var newCmd = &cobra.Command{
 }
 
 var (
-	newModulePath string
-	newPort       int
+	newModulePath  string
+	newPort        int
+	newDBAdapter   string
 )
 
 func init() {
 	newCmd.Flags().StringVar(&newModulePath, "module-path", "", "Go module path (default: github.com/<user>/<name>)")
 	newCmd.Flags().IntVar(&newPort, "port", 3001, "default HTTP port in generated config")
+	newCmd.Flags().StringVar(&newDBAdapter, "db", "postgres", "database adapter: postgres | mongo | rtdb")
 }
 
 type projectCtx struct {
 	ProjectName string
 	ModulePath  string
 	Port        int
+	DBAdapter   string
 }
 
 func runNew(_ *cobra.Command, args []string) error {
 	name := args[0]
+
+	switch newDBAdapter {
+	case "postgres", "mongo", "rtdb":
+	default:
+		return fmt.Errorf("unknown database adapter %q (valid: postgres, mongo, rtdb)", newDBAdapter)
+	}
 
 	modPath := newModulePath
 	if modPath == "" {
@@ -45,9 +54,10 @@ func runNew(_ *cobra.Command, args []string) error {
 	}
 
 	ctx := projectCtx{
-		ProjectName: name,
+		ProjectName: filepath.Base(name),
 		ModulePath:  modPath,
 		Port:        newPort,
+		DBAdapter:   newDBAdapter,
 	}
 
 	if _, err := os.Stat(name); err == nil {
@@ -59,7 +69,7 @@ func runNew(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Creating project %q → ./%s\n", name, name)
+	fmt.Printf("Creating project %q → ./%s  [db: %s]\n", name, name, newDBAdapter)
 
 	type outFile struct {
 		tmplName string
@@ -72,6 +82,7 @@ func runNew(_ *cobra.Command, args []string) error {
 		{".env.example.tmpl", filepath.Join(name, ".env.example")},
 		{"main.go.tmpl", filepath.Join(name, "cmd", "api", "main.go")},
 		{"config.go.tmpl", filepath.Join(name, "internal", "core", "config", "config.go")},
+		{"db." + newDBAdapter + ".go.tmpl", filepath.Join(name, "internal", "core", "db", "db.go")},
 		{"errors.go.tmpl", filepath.Join(name, "internal", "core", "errors", "errors.go")},
 		{"response.go.tmpl", filepath.Join(name, "internal", "core", "response", "response.go")},
 		{"auth.go.tmpl", filepath.Join(name, "internal", "middleware", "auth.go")},

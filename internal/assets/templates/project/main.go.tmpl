@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"{{.ModulePath}}/internal/core/config"
+	"{{.ModulePath}}/internal/core/db"
 	"{{.ModulePath}}/internal/middleware"
 )
 
@@ -25,6 +26,26 @@ func main() {
 		logger.Fatal("config", zap.Error(err))
 	}
 
+{{- if eq .DBAdapter "postgres"}}
+	pool, err := db.Connect(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		logger.Fatal("database", zap.Error(err))
+	}
+	defer pool.Close()
+{{- else if eq .DBAdapter "mongo"}}
+	mongoClient, err := db.Connect(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		logger.Fatal("database", zap.Error(err))
+	}
+	defer mongoClient.Disconnect(context.Background())
+{{- else if eq .DBAdapter "rtdb"}}
+	rtdbClient, err := db.Connect(context.Background(), cfg.CredentialsFile, cfg.DatabaseURL)
+	if err != nil {
+		logger.Fatal("database", zap.Error(err))
+	}
+{{- end}}
+	logger.Info("database connected")
+
 	r := gin.New()
 	r.Use(middleware.Logger(logger))
 	r.Use(middleware.ErrorHandler(logger))
@@ -33,10 +54,16 @@ func main() {
 
 	// TODO: wire your modules here.
 	// Example:
+{{- if eq .DBAdapter "postgres"}}
 	//   userRepo    := user.NewRepository(pool)
+{{- else if eq .DBAdapter "mongo"}}
+	//   userRepo    := user.NewRepository(mongoClient.Database("{{.ProjectName}}"))
+{{- else if eq .DBAdapter "rtdb"}}
+	//   userRepo    := user.NewRepository(rtdbClient)
+{{- end}}
 	//   userService := user.NewService(userRepo)
 	//   userHandler := user.NewHandler(userService)
-	//   user.RegisterRoutes(v1, userHandler, middleware.Auth(userRepo))
+	//   user.RegisterRoutes(v1, userHandler, middleware.Auth())
 	_ = v1
 
 	srv := &http.Server{
