@@ -9,8 +9,10 @@ This guide walks you through creating a new Go API project and generating your f
 ## 1. Create a New Project
 
 ```bash
-goclarc new my-api --module-path github.com/you/my-api
+goclarc new my-api --db postgres --module-path github.com/you/my-api
 ```
+
+`--db` controls which database driver is scaffolded (`postgres` | `mongo` | `rtdb`). It defaults to `postgres`.
 
 This generates a complete project skeleton:
 
@@ -18,11 +20,13 @@ This generates a complete project skeleton:
 my-api/
   cmd/
     api/
-      main.go                      # Gin server with graceful shutdown
+      main.go                      # Gin server, DB connect, graceful shutdown
   internal/
     core/
       config/
         config.go                  # Environment-based Config struct
+      db/
+        db.go                      # Connect() — one shared pool for all modules
       errors/
         errors.go                  # AppError type + sentinel errors
       response/
@@ -36,11 +40,12 @@ my-api/
   .env.example
 ```
 
-Move into your project:
+Move into your project and fill in the database URL:
 
 ```bash
 cd my-api
 cp .env.example .env
+# edit .env and set DATABASE_URL
 ```
 
 ## 2. Write a Schema
@@ -114,31 +119,29 @@ Use `--dry-run` to print the generated files to stdout without touching the file
 goclarc module user --db postgres --schema schemas/user.yaml --dry-run
 ```
 
-## 5. Wire the Module into main.go
+## 5. Wire the Module into `main.go`
 
-Open `cmd/api/main.go`. You'll see a TODO comment:
-
-```go
-// TODO: wire your modules here.
-// Example:
-//   userRepo    := user.NewRepository(pool)
-//   userService := user.NewService(userRepo)
-//   userHandler := user.NewHandler(userService)
-//   user.RegisterRoutes(v1, userHandler, middleware.Auth())
-```
-
-Replace it with:
+Open `cmd/api/main.go`. The database connection is already set up — find the TODO comment and add your module:
 
 ```go
 import "github.com/you/my-api/internal/modules/user"
 
-// inside main()
-pool := /* set up pgxpool.Connect(...) */
-
+// The pool is already open — just pass it in:
 userRepo    := user.NewRepository(pool)
 userService := user.NewService(userRepo)
 userHandler := user.NewHandler(userService)
 user.RegisterRoutes(v1, userHandler, middleware.Auth())
+```
+
+Adding a second module uses the **same `pool`** — no second connection:
+
+```go
+import "github.com/you/my-api/internal/modules/cart"
+
+cartRepo    := cart.NewRepository(pool)
+cartService := cart.NewService(cartRepo)
+cartHandler := cart.NewHandler(cartService)
+cart.RegisterRoutes(v1, cartHandler, middleware.Auth())
 ```
 
 ## 6. Apply the Migration
@@ -159,6 +162,7 @@ go run ./cmd/api
 ```
 
 ```
+{"level":"info","ts":"...","msg":"database connected"}
 {"level":"info","ts":"...","msg":"server started","port":3001}
 ```
 
@@ -174,6 +178,6 @@ Your endpoints are live:
 
 ## Next Steps
 
-- Add a second module: `goclarc module post --db mongo --schema schemas/post.yaml`
+- Add a second module: `goclarc module cart --db postgres --schema schemas/cart.yaml`
 - Read the [Schema Reference](./schema/overview) to understand all field types
 - Browse [Examples](./examples) for real-world patterns

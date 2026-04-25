@@ -28,8 +28,8 @@ goclarc --version
 ## Quick Start
 
 ```bash
-# 1. Scaffold a new project
-goclarc new my-api --module-path github.com/you/my-api
+# 1. Scaffold a new project (--db defaults to postgres)
+goclarc new my-api --db postgres --module-path github.com/you/my-api
 
 cd my-api
 
@@ -81,8 +81,9 @@ go run ./cmd/api
 
 ```
 my-api/
-  cmd/api/main.go                   # Gin server, graceful shutdown
-  internal/core/config/config.go    # env-based Config (caarlos0/env)
+  cmd/api/main.go                   # Gin server, DB connect, graceful shutdown
+  internal/core/config/config.go    # env-based Config (adapter-specific fields)
+  internal/core/db/db.go            # Connect() — one shared pool for all modules
   internal/core/errors/errors.go    # AppError, sentinel errors
   internal/core/response/           # OK(), Created(), Fail() helpers
   internal/middleware/              # Logger (zap), ErrorHandler, Auth stub
@@ -146,6 +147,7 @@ fields:
 
 | Flag | Default | Description |
 |---|---|---|
+| `--db` | `postgres` | Database adapter: `postgres` \| `mongo` \| `rtdb` |
 | `--module-path` | `github.com/<user>/<name>` | Go module path |
 | `--port` | `3001` | Default HTTP port in generated config |
 
