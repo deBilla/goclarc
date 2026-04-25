@@ -6,6 +6,10 @@ sidebar_position: 9
 
 Every file goclarc generates follows the patterns described in [Effective Go](https://go.dev/doc/effective_go) and the conventions established by the Go team. This page explains **why** each pattern is used and **how to apply it** when you extend the generated code — so that your custom additions stay idiomatic.
 
+:::info Effective Go was written in 2009 and is not actively updated
+It remains a good guide for core language mechanics, but it predates generics, modules, the modern error chain (`errors.Is`/`errors.As`), `any`, the `slices`/`maps`/`cmp` stdlib packages, structured logging, and much more. This page covers both the original guidance and everything added through Go 1.26. For the authoritative list of changes, see the [Go release notes](https://go.dev/doc/devel/release).
+:::
+
 This is your reference for writing Go the goclarc way.
 
 ---
@@ -699,38 +703,412 @@ var _ Repository = (*repository)(nil)
 
 ---
 
-## Go 1.26 Patterns
+## Modern Go
 
-goclarc targets Go 1.26. These are the relevant additions to be aware of when extending generated code:
+Effective Go was written in 2009 and covers the core language well, but many of the patterns below did not exist then. goclarc targets Go 1.26 and uses all of these throughout generated and framework code.
 
-**`any` is now universal** — Go 1.18 introduced `any` as an alias for `interface{}`, and 1.26's `go fix` modernisers will automatically rewrite `interface{}` to `any` in your code. goclarc generates `any` everywhere.
+### Modules — Go 1.11+
 
-**`io.ReadAll` is 2× faster** — if your service layer reads request payloads or external responses manually, prefer `io.ReadAll` over manual buffer management.
+Every project has a `go.mod` that declares its module path and minimum Go version. goclarc generates `go.mod` for you:
 
-**Green Tea GC (default)** — the new garbage collector reduces GC overhead by 10–40% with no code changes. High-throughput handlers benefit automatically. Don't fight the GC with `sync.Pool` until you have profiler evidence.
+```
+module github.com/you/my-api
 
-**`reflect` iterators** — `Type.Fields()` and `Type.Methods()` now return iterators. If you build generic validation or serialisation utilities on top of generated entities, prefer the iterator form.
+go 1.26
+```
 
-**`new(T)` accepts expressions** — Go 1.26 allows `new(T{field: value})` for immediate initialisation. Useful when you construct pointer-to-struct values in one line.
+Run `go mod tidy` after adding imports. Never hand-edit `go.sum`. Use `go.work` when developing multiple local modules simultaneously:
 
-**Run `go fix ./...`** after upgrading to apply all official modernisers to your codebase automatically.
+```bash
+go work init ./my-api ./my-shared-lib
+```
+
+Deprecated: `GOPATH`-only workflows. All new projects use modules.
+
+---
+
+### Error chain — Go 1.13+
+
+This is the most important addition since Effective Go. Before 1.13, errors had no standard wrapping mechanism.
+
+**`%w` wraps; `%v` does not.** Only `%w` makes the original error reachable via `errors.Is`/`errors.As`.
+
+```go
+// Wrap — original error is preserved in the chain
+return fmt.Errorf("user.repository.GetByID: %w", err)
+
+// Format only — original error is lost
+return fmt.Errorf("user.repository.GetByID: %v", err)
+```
+
+**`errors.Is`** traverses the full chain checking for a specific sentinel:
+
+```go
+if errors.Is(err, apperr.ErrNotFound) {
+    // true even if err is fmt.Errorf("...: %w", apperr.ErrNotFound)
+}
+```
+
+**`errors.As`** traverses the chain and extracts a typed error:
+
+```go
+var appErr *apperr.AppError
+if errors.As(err, &appErr) {
+    // appErr is now the concrete *AppError, even if nested deeply
+}
+```
+
+**`errors.Join`** (Go 1.20) wraps multiple errors into one, all reachable via `errors.Is`:
+
+```go
+// Useful when validating a struct with multiple fields
+var errs []error
+if req.Email == "" {
+    errs = append(errs, ErrMissingEmail)
+}
+if req.Name == "" {
+    errs = append(errs, ErrMissingName)
+}
+return errors.Join(errs...)
+```
+
+---
+
+### `any` — Go 1.18+
+
+`any` is the official alias for `interface{}`. Use it everywhere:
+
+```go
+// All generated code uses any
+func Scan(dest ...any) error { ... }
+updates := map[string]any{}
+```
+
+The `go fix` tool rewrites `interface{}` → `any` automatically when you run `go fix ./...`.
+
+---
+
+### Generics — Go 1.18+
+
+Type parameters let you write functions and types that work across types without losing type safety or resorting to `any`.
+
+**Generic helper functions** — use the `slices`, `maps`, and `cmp` packages (Go 1.21) rather than writing your own:
+
+```go
+import (
+    "cmp"
+    "slices"
+    "maps"
+)
+
+// Sort a slice of entities by name — no custom sort.Interface needed
+slices.SortFunc(entities, func(a, b *Entity) int {
+    return cmp.Compare(a.Name, b.Name)
+})
+
+// Check if a slice contains a value
+if slices.Contains(ids, targetID) { ... }
+
+// Collect map keys
+keys := slices.Collect(maps.Keys(myMap))
+```
+
+**Generic repository pattern** — if you find yourself writing identical CRUD methods across modules, a generic base can eliminate the duplication:
+
+```go
+type CRUD[E any, CP any, UP any] interface {
+    Create(ctx context.Context, p CP) (*E, error)
+    GetByID(ctx context.Context, id string) (*E, error)
+    List(ctx context.Context) ([]*E, error)
+    Update(ctx context.Context, p UP) (*E, error)
+    Delete(ctx context.Context, id string) error
+}
+```
+
+Generated per-module interfaces still satisfy this — you get both the concrete interface (for mocking) and the generic constraint (for shared utilities).
+
+**Constraints** — use `comparable` for map keys and `cmp.Ordered` for sortable types:
+
+```go
+func FindByID[E any](entities []E, id string, getID func(E) string) (E, bool) {
+    for _, e := range entities {
+        if getID(e) == id {
+            return e, true
+        }
+    }
+    var zero E
+    return zero, false
+}
+```
+
+---
+
+### Loop variable semantics — Go 1.22+
+
+Before Go 1.22, loop variables were shared across iterations — a common source of goroutine bugs:
+
+```go
+// Pre-1.22: all goroutines captured the same 'e' variable
+for _, e := range entities {
+    go process(e)   // BUG: e may be overwritten before goroutine runs
+}
+
+// Pre-1.22 workaround
+for _, e := range entities {
+    e := e   // shadow with a new variable
+    go process(e)
+}
+```
+
+**Go 1.22+: each iteration gets its own variable.** The workaround is no longer needed — but leaving it in is harmless.
+
+```go
+// Go 1.22+: safe without shadowing
+for _, e := range entities {
+    go process(e)
+}
+```
+
+goclarc's `go.mod` declares `go 1.26`, so generated code gets this behaviour automatically.
+
+---
+
+### Range over integers — Go 1.22+
+
+```go
+// Clean iteration without a separate counter variable
+for i := range 5 {
+    fmt.Println(i)   // 0 1 2 3 4
+}
+
+// Useful for generating placeholders
+placeholders := make([]string, n)
+for i := range n {
+    placeholders[i] = fmt.Sprintf("$%d", i+1)
+}
+```
+
+---
+
+### New built-ins — Go 1.21+
+
+**`min` and `max`** work on any `cmp.Ordered` type:
+
+```go
+limit := min(requestedLimit, 100)
+offset := max(0, page*limit)
+```
+
+**`clear`** zeroes all elements of a slice or deletes all keys from a map:
+
+```go
+clear(myMap)      // equivalent to: for k := range myMap { delete(myMap, k) }
+clear(mySlice)    // zeroes elements, keeps length
+```
+
+---
+
+### Context additions — Go 1.21+
+
+**`context.WithCancelCause`** lets the canceller attach a reason:
+
+```go
+ctx, cancel := context.WithCancelCause(parent)
+
+// Cancel with a reason
+cancel(fmt.Errorf("rate limit exceeded for user %s", userID))
+
+// Retrieve the reason anywhere downstream
+cause := context.Cause(ctx)   // returns the error passed to cancel
+```
+
+**`context.WithoutCancel`** detaches a context from its parent's cancellation — useful for cleanup work that must run even after the request context is cancelled:
+
+```go
+func (s *service) Delete(ctx context.Context, id string) error {
+    if err := s.repo.Delete(ctx, id); err != nil {
+        return err
+    }
+    // Audit log must complete even if the request was cancelled
+    auditCtx := context.WithoutCancel(ctx)
+    _ = s.audit.Log(auditCtx, "deleted", id)
+    return nil
+}
+```
+
+**`context.AfterFunc`** schedules a function to run in a new goroutine after a context is done:
+
+```go
+stop := context.AfterFunc(ctx, func() {
+    cleanup()
+})
+defer stop()
+```
+
+---
+
+### Atomic types — Go 1.19+
+
+Use the typed atomic wrappers instead of `sync/atomic` functions with `unsafe.Pointer`:
+
+```go
+// Old style — error-prone
+var counter int64
+atomic.AddInt64(&counter, 1)
+
+// New style — type-safe, no unsafe
+var counter atomic.Int64
+counter.Add(1)
+current := counter.Load()
+
+// For pointers
+var cached atomic.Pointer[Config]
+cached.Store(newConfig)
+cfg := cached.Load()
+```
+
+---
+
+### Structured logging — Go 1.21+
+
+The stdlib now has `log/slog` for structured, levelled logging. goclarc uses `zap` (faster, better Gin integration), but `slog` is the right choice for new projects without an existing logging dependency:
+
+```go
+import "log/slog"
+
+// Context-aware structured log
+slog.InfoContext(ctx, "request completed",
+    "method", r.Method,
+    "path", r.URL.Path,
+    "status", status,
+    "duration_ms", duration.Milliseconds(),
+)
+```
+
+`slog` handlers are composable — you can write a `slog.Handler` that forwards to `zap` if you need to bridge existing infrastructure.
+
+---
+
+### Deprecated stdlib — replace these
+
+| Old | Replacement | Since |
+|---|---|---|
+| `io/ioutil.ReadFile` | `os.ReadFile` | 1.16 |
+| `io/ioutil.WriteFile` | `os.WriteFile` | 1.16 |
+| `io/ioutil.ReadAll` | `io.ReadAll` | 1.16 |
+| `io/ioutil.ReadDir` | `os.ReadDir` | 1.16 |
+| `io/ioutil.TempFile` | `os.CreateTemp` | 1.16 |
+| `math/rand.Intn` | `math/rand/v2.IntN` | 1.22 |
+| `math/rand.Seed` | removed — v2 auto-seeds | 1.20 |
+| `sort.Slice` | `slices.SortFunc` | 1.21 |
+| `sort.Search` | `slices.BinarySearchFunc` | 1.21 |
+| `interface{}` | `any` | 1.18 |
+
+The `go fix ./...` command applies most of these rewrites automatically.
+
+---
+
+### net/http routing — Go 1.22+
+
+The stdlib `ServeMux` now supports method prefixes and path parameters, eliminating the need for a router for simple cases:
+
+```go
+mux := http.NewServeMux()
+mux.HandleFunc("GET /api/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+    id := r.PathValue("id")
+    ...
+})
+mux.HandleFunc("POST /api/users", handleCreate)
+```
+
+goclarc uses Gin for its richer middleware, binding, and validation ecosystem. For new projects that don't need Gin's extras, the stdlib router is now sufficient.
+
+---
+
+### Testing — Go 1.14+
+
+**`t.Cleanup`** registers cleanup functions that run after the test, in LIFO order, and report failures:
+
+```go
+func TestCreate(t *testing.T) {
+    db := setupTestDB(t)
+    t.Cleanup(func() { db.Close() })   // runs after test, even on failure
+    ...
+}
+```
+
+**`t.Setenv`** sets an environment variable for the duration of the test and restores it automatically:
+
+```go
+t.Setenv("DATABASE_URL", "postgres://localhost/testdb")
+```
+
+**Fuzzing** (Go 1.18) finds edge-case inputs automatically:
+
+```go
+func FuzzParseSchema(f *testing.F) {
+    f.Add([]byte(`module: user\nfields: []`))   // seed corpus
+    f.Fuzz(func(t *testing.T, data []byte) {
+        // must not panic on any input
+        _, _ = schema.Parse(data)
+    })
+}
+```
+
+Run with `go test -fuzz=FuzzParseSchema`. Findings are saved to `testdata/fuzz/` for regression.
+
+**`t.ArtifactDir`** (Go 1.26) writes test output files that survive the test run:
+
+```go
+func TestGeneratedCode(t *testing.T) {
+    dir := t.ArtifactDir()
+    os.WriteFile(filepath.Join(dir, "output.go"), generated, 0o644)
+}
+```
+
+---
+
+### Profile-Guided Optimisation — Go 1.20+
+
+Build with a CPU profile to get 2–7% performance gains with no code changes:
+
+```bash
+# 1. Collect a profile from production (or a load test)
+curl http://localhost:6060/debug/pprof/profile?seconds=30 > default.pgo
+
+# 2. Build with the profile
+go build -pgo=default.pgo ./cmd/api
+```
+
+Place `default.pgo` in the `cmd/api/` directory and the compiler picks it up automatically on every subsequent build.
 
 ---
 
 ## Quick Reference
 
-| Pattern | Rule |
-|---|---|
-| Package names | Lowercase, single-word, no underscores |
-| Multi-word identifiers | `MixedCaps` / `mixedCaps` — never underscore |
-| Acronyms | All-caps: `UserID`, `HTTPHandler`, `APIKey` |
-| Getters | `Owner()` not `GetOwner()` |
-| Single-method interfaces | Method + "-er": `Reader`, `Writer`, `Scanner` |
-| Error return position | Always last: `(T, error)` |
-| Error wrapping | `fmt.Errorf("layer.Method: %w", err)` |
-| Not-found detection | `errors.Is(err, ErrNotFound)` — never string match |
-| Context | First argument, always propagated |
-| `interface{}` | Use `any` instead |
-| Cleanup | `defer resource.Close()` immediately after acquiring |
-| Goroutines | Know when they end; use context for cancellation |
-| Panic | Only for unrecoverable invariants; never in library code |
+| Pattern | Rule | Since |
+|---|---|---|
+| Package names | Lowercase, single-word, no underscores | Always |
+| Multi-word identifiers | `MixedCaps` / `mixedCaps` — never underscore | Always |
+| Acronyms | All-caps: `UserID`, `HTTPHandler`, `APIKey` | Always |
+| Getters | `Owner()` not `GetOwner()` | Always |
+| Single-method interfaces | Method + "-er": `Reader`, `Writer`, `Scanner` | Always |
+| Error return position | Always last: `(T, error)` | Always |
+| Error wrapping | `fmt.Errorf("layer.Method: %w", err)` | 1.13 |
+| Error chain checking | `errors.Is` / `errors.As` — never string match | 1.13 |
+| Multiple errors | `errors.Join(errs...)` | 1.20 |
+| Context | First argument, always propagated — never stored | Always |
+| Cancel with reason | `context.WithCancelCause` + `context.Cause` | 1.21 |
+| `interface{}` | Use `any` instead | 1.18 |
+| Generic collections | `slices`, `maps`, `cmp` packages | 1.21 |
+| Loop variables | Each iteration owns its variable — no shadowing needed | 1.22 |
+| Range integers | `for i := range n { }` | 1.22 |
+| Built-ins | `min`, `max`, `clear` | 1.21 |
+| Atomic counters | `atomic.Int64`, `atomic.Pointer[T]` | 1.19 |
+| Cleanup | `defer resource.Close()` immediately after acquiring | Always |
+| Test cleanup | `t.Cleanup(fn)` instead of `defer` in tests | 1.14 |
+| Goroutines | Know when they end; use context for cancellation | Always |
+| Panic | Only for unrecoverable invariants; never in library code | Always |
+| Deprecated io/ioutil | Use `os.ReadFile`, `io.ReadAll` | 1.16 |
+| Deprecated math/rand | Use `math/rand/v2` | 1.22 |
+| Auto-modernise | Run `go fix ./...` after each Go upgrade | Always |
