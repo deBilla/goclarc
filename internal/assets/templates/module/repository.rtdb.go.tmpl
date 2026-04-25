@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"firebase.google.com/go/v4/db"
+
+	apperr "{{.ModulePath}}/internal/core/errors"
 )
 
 // Repository defines the data-access contract for the {{.ModuleTitle}} domain.
@@ -26,7 +28,7 @@ func NewRepository(client *db.Client) Repository {
 }
 
 func (r *repository) Create(ctx context.Context, p CreateParams) (*Entity, error) {
-	data := map[string]interface{}{
+	data := map[string]any{
 {{- range .CreateFields}}
 		"{{.JSONTag}}": p.{{.GoName}},
 {{- end}}
@@ -39,18 +41,18 @@ func (r *repository) Create(ctx context.Context, p CreateParams) (*Entity, error
 }
 
 func (r *repository) GetByID(ctx context.Context, id string) (*Entity, error) {
-	var data map[string]interface{}
+	var data map[string]any
 	if err := r.ref.Child(id).Get(ctx, &data); err != nil {
 		return nil, fmt.Errorf("{{.ModuleName}}.repository.GetByID: %w", err)
 	}
 	if data == nil {
-		return nil, fmt.Errorf("{{.ModuleName}} not found")
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.GetByID: %w", apperr.ErrNotFound)
 	}
 	return mapToEntity(data, id), nil
 }
 
 func (r *repository) List(ctx context.Context) ([]*Entity, error) {
-	var data map[string]map[string]interface{}
+	var data map[string]map[string]any
 	if err := r.ref.Get(ctx, &data); err != nil {
 		return nil, fmt.Errorf("{{.ModuleName}}.repository.List: %w", err)
 	}
@@ -62,7 +64,7 @@ func (r *repository) List(ctx context.Context) ([]*Entity, error) {
 }
 
 func (r *repository) Update(ctx context.Context, p UpdateParams) (*Entity, error) {
-	updates := map[string]interface{}{}
+	updates := map[string]any{}
 {{- range .UpdateFields}}
 	if p.{{.GoName}} != nil {
 		updates["{{.JSONTag}}"] = p.{{.GoName}}
@@ -81,7 +83,7 @@ func (r *repository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func mapToEntity(data map[string]interface{}, id string) *Entity {
+func mapToEntity(data map[string]any, id string) *Entity {
 	e := &Entity{}
 {{- range .Fields}}
 {{- if .IsPrimary}}

@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	apperr "{{.ModulePath}}/internal/core/errors"
 )
 
 // Repository defines the data-access contract for the {{.ModuleTitle}} domain.
@@ -51,7 +53,7 @@ func (r *repository) GetByID(ctx context.Context, id string) (*Entity, error) {
 	entity, err := scanEntity(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("{{.ModuleName}} not found")
+			return nil, fmt.Errorf("{{.ModuleName}}.repository.GetByID: %w", apperr.ErrNotFound)
 		}
 		return nil, fmt.Errorf("{{.ModuleName}}.repository.GetByID: %w", err)
 	}
@@ -95,7 +97,7 @@ func (r *repository) Update(ctx context.Context, p UpdateParams) (*Entity, error
 	entity, err := scanEntity(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("{{.ModuleName}} not found")
+			return nil, fmt.Errorf("{{.ModuleName}}.repository.Update: %w", apperr.ErrNotFound)
 		}
 		return nil, fmt.Errorf("{{.ModuleName}}.repository.Update: %w", err)
 	}
@@ -110,7 +112,7 @@ func (r *repository) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("{{.ModuleName}}.repository.Delete: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("{{.ModuleName}} not found")
+		return fmt.Errorf("{{.ModuleName}}.repository.Delete: %w", apperr.ErrNotFound)
 	}
 	return nil
 }

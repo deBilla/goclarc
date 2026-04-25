@@ -231,7 +231,7 @@ func (a *rtdbAdapter) Map(fieldType string, nullable bool) GoTypeInfo {
 		// RTDB stores timestamps as unix milliseconds.
 		return GoTypeInfo{EntityType: "int64", ViewType: "int64", CreateType: "int64", UpdateType: "*int64", ZeroValue: "0"}
 	case "json":
-		return GoTypeInfo{EntityType: "map[string]interface{}", ViewType: "map[string]interface{}", CreateType: "map[string]interface{}", UpdateType: "map[string]interface{}", ZeroValue: "nil"}
+		return GoTypeInfo{EntityType: "map[string]any", ViewType: "map[string]any", CreateType: "map[string]any", UpdateType: "map[string]any", ZeroValue: "nil"}
 	case "string[]":
 		return GoTypeInfo{EntityType: "[]string", ViewType: "[]string", CreateType: "[]string", UpdateType: "[]string", ZeroValue: "nil"}
 	default:

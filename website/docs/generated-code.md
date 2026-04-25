@@ -107,7 +107,15 @@ type repository struct {
 
 Queries are raw SQL strings embedded directly in the repository. pgx/v5 scans results into `Entity` fields via a shared `scanEntity` helper that accepts both `pgx.Row` and `pgx.Rows`.
 
-Not-found cases return a `"<module> not found"` error, which the error middleware automatically maps to a 404 response.
+Not-found cases wrap the `apperr.ErrNotFound` sentinel so the full error chain is intact for `errors.Is`:
+
+```go
+if errors.Is(err, pgx.ErrNoRows) {
+    return nil, fmt.Errorf("user.repository.GetByID: %w", apperr.ErrNotFound)
+}
+```
+
+The error middleware then maps this to a 404 using `errors.Is(err, apperr.ErrNotFound)` — no string matching involved.
 
 **What you might add:** Additional query methods (e.g., `ListByEmail`, `GetByUserID`), pagination parameters to `List`.
 
@@ -200,8 +208,10 @@ The generated error middleware (`internal/middleware/error.go`) maps errors to H
 | Situation | Status | Response |
 |---|---|---|
 | `AppError` (typed sentinel) | varies | `{"success":false,"error":{"code":"...","message":"..."}}` |
-| Error message contains `"not found"` | 404 | `{"success":false,"error":{"code":"NOT_FOUND","message":"..."}}` |
+| `errors.Is(err, ErrNotFound)` | 404 | `{"success":false,"error":{"code":"NOT_FOUND","message":"..."}}` |
 | Any other error | 500 | `{"success":false,"error":{"code":"INTERNAL_ERROR","message":"..."}}` |
+
+The middleware uses `errors.Is` to traverse the full error chain — no fragile string matching.
 
 The actual error message is always included — you'll never see a generic `"an unexpected error occurred"` in the response.
 

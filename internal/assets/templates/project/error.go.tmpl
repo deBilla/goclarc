@@ -12,6 +12,7 @@ import (
 )
 
 // ErrorHandler maps errors added via c.Error() to JSON responses and logs them.
+// Error priority: AppError (typed sentinel) → ErrNotFound → generic 500.
 func ErrorHandler(log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
@@ -37,26 +38,25 @@ func ErrorHandler(log *zap.Logger) gin.HandlerFunc {
 			return
 		}
 
-		msg := err.Error()
-		if strings.Contains(msg, "not found") {
+		if errors.Is(err, apperr.ErrNotFound) {
 			log.Warn("not found",
-				zap.String("error", msg),
+				zap.String("error", err.Error()),
 				zap.String("path", c.Request.URL.Path),
 			)
 			c.JSON(http.StatusNotFound, gin.H{
 				"success": false,
-				"error":   gin.H{"code": "NOT_FOUND", "message": msg},
+				"error":   gin.H{"code": "NOT_FOUND", "message": err.Error()},
 			})
 			return
 		}
 
 		log.Error("internal error",
-			zap.String("error", msg),
+			zap.String("error", err.Error()),
 			zap.String("path", c.Request.URL.Path),
 		)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   gin.H{"code": "INTERNAL_ERROR", "message": msg},
+			"error":   gin.H{"code": "INTERNAL_ERROR", "message": err.Error()},
 		})
 	}
 }

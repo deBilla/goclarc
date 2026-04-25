@@ -23,6 +23,7 @@ const sidebars = {
       items: ['adapters/postgres', 'adapters/mongo', 'adapters/rtdb'],
     },
     'generated-code',
+    'go-best-practices',
     'examples',
   ],
 };
