@@ -31,6 +31,7 @@ var (
 	moduleDryRun       bool
 	moduleReset        bool
 	moduleModPath      string
+	moduleSwagger      bool
 )
 
 func init() {
@@ -43,6 +44,7 @@ func init() {
 	moduleCmd.Flags().BoolVar(&moduleDryRun, "dry-run", false, "print generated files to stdout without writing")
 	moduleCmd.Flags().BoolVar(&moduleReset, "reset", false, "delete all files previously generated for this module")
 	moduleCmd.Flags().StringVar(&moduleModPath, "module-path", "", "Go module path (detected from go.mod if omitted)")
+	moduleCmd.Flags().BoolVar(&moduleSwagger, "swagger", false, "generate docs/<name>.openapi.yaml spec for this module")
 	_ = moduleCmd.MarkFlagRequired("schema")
 }
 
@@ -115,6 +117,13 @@ func moduleFiles(ctx gen.TemplateContext, modName, outDir string) []gen.File {
 				OutputPath:   filepath.Join(moduleMigrationDir, "001_create_"+ctx.TableName+".sql"),
 			},
 		)
+	}
+
+	if moduleSwagger {
+		files = append(files, gen.File{
+			TemplateName: "openapi.yaml.tmpl",
+			OutputPath:   filepath.Join("docs", modName+".openapi.yaml"),
+		})
 	}
 
 	return files

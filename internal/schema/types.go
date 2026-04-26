@@ -22,6 +22,12 @@ type GoTypeInfo struct {
 	IsPointerNullable bool
 	// ViewIsString means the View field should be rendered as a string (e.g. time.RFC3339).
 	ViewIsString bool
+	// OAType is the OpenAPI primitive type (string, integer, number, boolean, object, array).
+	OAType string
+	// OAFormat is the OpenAPI format qualifier (uuid, int32, int64, float, date-time). Empty when none applies.
+	OAFormat string
+	// OAItemType is the OpenAPI items type for array fields (e.g. "string" for string[]).
+	OAItemType string
 }
 
 // Adapter maps schema field types to database-specific Go type information.
@@ -60,32 +66,33 @@ func (a *postgresAdapter) Map(fieldType string, nullable bool) GoTypeInfo {
 			EntityType: "string", ViewType: "string",
 			CreateType: "string", UpdateType: "*string",
 			ZeroValue: `""`,
+			OAType: "string", OAFormat: "uuid",
 		}
 	case "string":
 		if nullable {
-			return GoTypeInfo{EntityType: "*string", ViewType: "string", CreateType: "*string", UpdateType: "*string", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*string", ViewType: "string", CreateType: "*string", UpdateType: "*string", ZeroValue: "nil", OAType: "string"}
 		}
-		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`}
+		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`, OAType: "string"}
 	case "int":
 		if nullable {
-			return GoTypeInfo{EntityType: "*int32", ViewType: "int32", CreateType: "*int32", UpdateType: "*int32", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*int32", ViewType: "int32", CreateType: "*int32", UpdateType: "*int32", ZeroValue: "nil", OAType: "integer", OAFormat: "int32"}
 		}
-		return GoTypeInfo{EntityType: "int32", ViewType: "int32", CreateType: "int32", UpdateType: "*int32", ZeroValue: "0"}
+		return GoTypeInfo{EntityType: "int32", ViewType: "int32", CreateType: "int32", UpdateType: "*int32", ZeroValue: "0", OAType: "integer", OAFormat: "int32"}
 	case "int64":
 		if nullable {
-			return GoTypeInfo{EntityType: "*int64", ViewType: "int64", CreateType: "*int64", UpdateType: "*int64", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*int64", ViewType: "int64", CreateType: "*int64", UpdateType: "*int64", ZeroValue: "nil", OAType: "integer", OAFormat: "int64"}
 		}
-		return GoTypeInfo{EntityType: "int64", ViewType: "int64", CreateType: "int64", UpdateType: "*int64", ZeroValue: "0"}
+		return GoTypeInfo{EntityType: "int64", ViewType: "int64", CreateType: "int64", UpdateType: "*int64", ZeroValue: "0", OAType: "integer", OAFormat: "int64"}
 	case "float":
 		if nullable {
-			return GoTypeInfo{EntityType: "*float64", ViewType: "float64", CreateType: "*float64", UpdateType: "*float64", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*float64", ViewType: "float64", CreateType: "*float64", UpdateType: "*float64", ZeroValue: "nil", OAType: "number", OAFormat: "float"}
 		}
-		return GoTypeInfo{EntityType: "float64", ViewType: "float64", CreateType: "float64", UpdateType: "*float64", ZeroValue: "0"}
+		return GoTypeInfo{EntityType: "float64", ViewType: "float64", CreateType: "float64", UpdateType: "*float64", ZeroValue: "0", OAType: "number", OAFormat: "float"}
 	case "bool":
 		if nullable {
-			return GoTypeInfo{EntityType: "*bool", ViewType: "bool", CreateType: "*bool", UpdateType: "*bool", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*bool", ViewType: "bool", CreateType: "*bool", UpdateType: "*bool", ZeroValue: "nil", OAType: "boolean"}
 		}
-		return GoTypeInfo{EntityType: "bool", ViewType: "bool", CreateType: "bool", UpdateType: "*bool", ZeroValue: "false"}
+		return GoTypeInfo{EntityType: "bool", ViewType: "bool", CreateType: "bool", UpdateType: "*bool", ZeroValue: "false", OAType: "boolean"}
 	case "timestamp":
 		if nullable {
 			return GoTypeInfo{
@@ -93,23 +100,26 @@ func (a *postgresAdapter) Map(fieldType string, nullable bool) GoTypeInfo {
 				CreateType: "*time.Time", UpdateType: "*time.Time",
 				ZeroValue: "nil", NeedsTimeImport: true,
 				IsPointerNullable: true, ViewIsString: true,
+				OAType: "string", OAFormat: "date-time",
 			}
 		}
 		return GoTypeInfo{
 			EntityType: "time.Time", ViewType: "string",
 			CreateType: "time.Time", UpdateType: "*time.Time",
 			ZeroValue: "time.Time{}", NeedsTimeImport: true, ViewIsString: true,
+			OAType: "string", OAFormat: "date-time",
 		}
 	case "json":
 		return GoTypeInfo{
 			EntityType: "json.RawMessage", ViewType: "json.RawMessage",
 			CreateType: "json.RawMessage", UpdateType: "json.RawMessage",
 			ZeroValue: "nil", NeedsJSONImport: true,
+			OAType: "object",
 		}
 	case "string[]":
-		return GoTypeInfo{EntityType: "[]string", ViewType: "[]string", CreateType: "[]string", UpdateType: "[]string", ZeroValue: "nil"}
+		return GoTypeInfo{EntityType: "[]string", ViewType: "[]string", CreateType: "[]string", UpdateType: "[]string", ZeroValue: "nil", OAType: "array", OAItemType: "string"}
 	default:
-		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`}
+		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`, OAType: "string"}
 	}
 }
 
@@ -134,32 +144,32 @@ func (a *mongoAdapter) DBImports(modulePath string) []string {
 func (a *mongoAdapter) Map(fieldType string, nullable bool) GoTypeInfo {
 	switch fieldType {
 	case "uuid":
-		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`}
+		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`, OAType: "string", OAFormat: "uuid"}
 	case "string":
 		if nullable {
-			return GoTypeInfo{EntityType: "*string", ViewType: "string", CreateType: "*string", UpdateType: "*string", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*string", ViewType: "string", CreateType: "*string", UpdateType: "*string", ZeroValue: "nil", OAType: "string"}
 		}
-		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`}
+		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`, OAType: "string"}
 	case "int":
 		if nullable {
-			return GoTypeInfo{EntityType: "*int32", ViewType: "int32", CreateType: "*int32", UpdateType: "*int32", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*int32", ViewType: "int32", CreateType: "*int32", UpdateType: "*int32", ZeroValue: "nil", OAType: "integer", OAFormat: "int32"}
 		}
-		return GoTypeInfo{EntityType: "int32", ViewType: "int32", CreateType: "int32", UpdateType: "*int32", ZeroValue: "0"}
+		return GoTypeInfo{EntityType: "int32", ViewType: "int32", CreateType: "int32", UpdateType: "*int32", ZeroValue: "0", OAType: "integer", OAFormat: "int32"}
 	case "int64":
 		if nullable {
-			return GoTypeInfo{EntityType: "*int64", ViewType: "int64", CreateType: "*int64", UpdateType: "*int64", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*int64", ViewType: "int64", CreateType: "*int64", UpdateType: "*int64", ZeroValue: "nil", OAType: "integer", OAFormat: "int64"}
 		}
-		return GoTypeInfo{EntityType: "int64", ViewType: "int64", CreateType: "int64", UpdateType: "*int64", ZeroValue: "0"}
+		return GoTypeInfo{EntityType: "int64", ViewType: "int64", CreateType: "int64", UpdateType: "*int64", ZeroValue: "0", OAType: "integer", OAFormat: "int64"}
 	case "float":
 		if nullable {
-			return GoTypeInfo{EntityType: "*float64", ViewType: "float64", CreateType: "*float64", UpdateType: "*float64", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*float64", ViewType: "float64", CreateType: "*float64", UpdateType: "*float64", ZeroValue: "nil", OAType: "number", OAFormat: "float"}
 		}
-		return GoTypeInfo{EntityType: "float64", ViewType: "float64", CreateType: "float64", UpdateType: "*float64", ZeroValue: "0"}
+		return GoTypeInfo{EntityType: "float64", ViewType: "float64", CreateType: "float64", UpdateType: "*float64", ZeroValue: "0", OAType: "number", OAFormat: "float"}
 	case "bool":
 		if nullable {
-			return GoTypeInfo{EntityType: "*bool", ViewType: "bool", CreateType: "*bool", UpdateType: "*bool", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*bool", ViewType: "bool", CreateType: "*bool", UpdateType: "*bool", ZeroValue: "nil", OAType: "boolean"}
 		}
-		return GoTypeInfo{EntityType: "bool", ViewType: "bool", CreateType: "bool", UpdateType: "*bool", ZeroValue: "false"}
+		return GoTypeInfo{EntityType: "bool", ViewType: "bool", CreateType: "bool", UpdateType: "*bool", ZeroValue: "false", OAType: "boolean"}
 	case "timestamp":
 		if nullable {
 			return GoTypeInfo{
@@ -167,19 +177,21 @@ func (a *mongoAdapter) Map(fieldType string, nullable bool) GoTypeInfo {
 				CreateType: "*time.Time", UpdateType: "*time.Time",
 				ZeroValue: "nil", NeedsTimeImport: true,
 				IsPointerNullable: true, ViewIsString: true,
+				OAType: "string", OAFormat: "date-time",
 			}
 		}
 		return GoTypeInfo{
 			EntityType: "time.Time", ViewType: "string",
 			CreateType: "time.Time", UpdateType: "*time.Time",
 			ZeroValue: "time.Time{}", NeedsTimeImport: true, ViewIsString: true,
+			OAType: "string", OAFormat: "date-time",
 		}
 	case "json":
-		return GoTypeInfo{EntityType: "bson.M", ViewType: "bson.M", CreateType: "bson.M", UpdateType: "bson.M", ZeroValue: "nil"}
+		return GoTypeInfo{EntityType: "bson.M", ViewType: "bson.M", CreateType: "bson.M", UpdateType: "bson.M", ZeroValue: "nil", OAType: "object"}
 	case "string[]":
-		return GoTypeInfo{EntityType: "[]string", ViewType: "[]string", CreateType: "[]string", UpdateType: "[]string", ZeroValue: "nil"}
+		return GoTypeInfo{EntityType: "[]string", ViewType: "[]string", CreateType: "[]string", UpdateType: "[]string", ZeroValue: "nil", OAType: "array", OAItemType: "string"}
 	default:
-		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`}
+		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`, OAType: "string"}
 	}
 }
 
@@ -202,40 +214,45 @@ func (a *rtdbAdapter) DBImports(modulePath string) []string {
 
 func (a *rtdbAdapter) Map(fieldType string, nullable bool) GoTypeInfo {
 	switch fieldType {
-	case "uuid", "string":
+	case "uuid":
 		if nullable {
-			return GoTypeInfo{EntityType: "*string", ViewType: "string", CreateType: "*string", UpdateType: "*string", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*string", ViewType: "string", CreateType: "*string", UpdateType: "*string", ZeroValue: "nil", OAType: "string", OAFormat: "uuid"}
 		}
-		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`}
+		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`, OAType: "string", OAFormat: "uuid"}
+	case "string":
+		if nullable {
+			return GoTypeInfo{EntityType: "*string", ViewType: "string", CreateType: "*string", UpdateType: "*string", ZeroValue: "nil", OAType: "string"}
+		}
+		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`, OAType: "string"}
 	case "int":
 		if nullable {
-			return GoTypeInfo{EntityType: "*int", ViewType: "int", CreateType: "*int", UpdateType: "*int", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*int", ViewType: "int", CreateType: "*int", UpdateType: "*int", ZeroValue: "nil", OAType: "integer", OAFormat: "int32"}
 		}
-		return GoTypeInfo{EntityType: "int", ViewType: "int", CreateType: "int", UpdateType: "*int", ZeroValue: "0"}
+		return GoTypeInfo{EntityType: "int", ViewType: "int", CreateType: "int", UpdateType: "*int", ZeroValue: "0", OAType: "integer", OAFormat: "int32"}
 	case "int64":
 		if nullable {
-			return GoTypeInfo{EntityType: "*int64", ViewType: "int64", CreateType: "*int64", UpdateType: "*int64", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*int64", ViewType: "int64", CreateType: "*int64", UpdateType: "*int64", ZeroValue: "nil", OAType: "integer", OAFormat: "int64"}
 		}
-		return GoTypeInfo{EntityType: "int64", ViewType: "int64", CreateType: "int64", UpdateType: "*int64", ZeroValue: "0"}
+		return GoTypeInfo{EntityType: "int64", ViewType: "int64", CreateType: "int64", UpdateType: "*int64", ZeroValue: "0", OAType: "integer", OAFormat: "int64"}
 	case "float":
 		if nullable {
-			return GoTypeInfo{EntityType: "*float64", ViewType: "float64", CreateType: "*float64", UpdateType: "*float64", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*float64", ViewType: "float64", CreateType: "*float64", UpdateType: "*float64", ZeroValue: "nil", OAType: "number", OAFormat: "float"}
 		}
-		return GoTypeInfo{EntityType: "float64", ViewType: "float64", CreateType: "float64", UpdateType: "*float64", ZeroValue: "0"}
+		return GoTypeInfo{EntityType: "float64", ViewType: "float64", CreateType: "float64", UpdateType: "*float64", ZeroValue: "0", OAType: "number", OAFormat: "float"}
 	case "bool":
 		if nullable {
-			return GoTypeInfo{EntityType: "*bool", ViewType: "bool", CreateType: "*bool", UpdateType: "*bool", ZeroValue: "nil"}
+			return GoTypeInfo{EntityType: "*bool", ViewType: "bool", CreateType: "*bool", UpdateType: "*bool", ZeroValue: "nil", OAType: "boolean"}
 		}
-		return GoTypeInfo{EntityType: "bool", ViewType: "bool", CreateType: "bool", UpdateType: "*bool", ZeroValue: "false"}
+		return GoTypeInfo{EntityType: "bool", ViewType: "bool", CreateType: "bool", UpdateType: "*bool", ZeroValue: "false", OAType: "boolean"}
 	case "timestamp":
-		// RTDB stores timestamps as unix milliseconds.
-		return GoTypeInfo{EntityType: "int64", ViewType: "int64", CreateType: "int64", UpdateType: "*int64", ZeroValue: "0"}
+		// RTDB stores timestamps as unix milliseconds; exposed as integer in the API.
+		return GoTypeInfo{EntityType: "int64", ViewType: "int64", CreateType: "int64", UpdateType: "*int64", ZeroValue: "0", OAType: "integer", OAFormat: "int64"}
 	case "json":
-		return GoTypeInfo{EntityType: "map[string]any", ViewType: "map[string]any", CreateType: "map[string]any", UpdateType: "map[string]any", ZeroValue: "nil"}
+		return GoTypeInfo{EntityType: "map[string]any", ViewType: "map[string]any", CreateType: "map[string]any", UpdateType: "map[string]any", ZeroValue: "nil", OAType: "object"}
 	case "string[]":
-		return GoTypeInfo{EntityType: "[]string", ViewType: "[]string", CreateType: "[]string", UpdateType: "[]string", ZeroValue: "nil"}
+		return GoTypeInfo{EntityType: "[]string", ViewType: "[]string", CreateType: "[]string", UpdateType: "[]string", ZeroValue: "nil", OAType: "array", OAItemType: "string"}
 	default:
-		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`}
+		return GoTypeInfo{EntityType: "string", ViewType: "string", CreateType: "string", UpdateType: "*string", ZeroValue: `""`, OAType: "string"}
 	}
 }
 

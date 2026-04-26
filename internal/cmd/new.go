@@ -21,15 +21,17 @@ var newCmd = &cobra.Command{
 }
 
 var (
-	newModulePath  string
-	newPort        int
-	newDBAdapter   string
+	newModulePath string
+	newPort       int
+	newDBAdapter  string
+	newSwagger    bool
 )
 
 func init() {
 	newCmd.Flags().StringVar(&newModulePath, "module-path", "", "Go module path (default: github.com/<user>/<name>)")
 	newCmd.Flags().IntVar(&newPort, "port", 3001, "default HTTP port in generated config")
 	newCmd.Flags().StringVar(&newDBAdapter, "db", "postgres", "database adapter: postgres | mongo | rtdb")
+	newCmd.Flags().BoolVar(&newSwagger, "swagger", false, "generate Swagger UI docs endpoint at GET /docs")
 }
 
 type projectCtx struct {
@@ -37,6 +39,7 @@ type projectCtx struct {
 	ModulePath  string
 	Port        int
 	DBAdapter   string
+	Swagger     bool
 }
 
 func runNew(_ *cobra.Command, args []string) error {
@@ -58,6 +61,7 @@ func runNew(_ *cobra.Command, args []string) error {
 		ModulePath:  modPath,
 		Port:        newPort,
 		DBAdapter:   newDBAdapter,
+		Swagger:     newSwagger,
 	}
 
 	if _, err := os.Stat(name); err == nil {
@@ -90,6 +94,13 @@ func runNew(_ *cobra.Command, args []string) error {
 		{"logger.go.tmpl", filepath.Join(name, "internal", "middleware", "logger.go")},
 	}
 
+	if newSwagger {
+		projectFiles = append(projectFiles,
+			outFile{"swagger.go.tmpl", filepath.Join(name, "docs", "swagger.go")},
+			outFile{"openapi.yaml.tmpl", filepath.Join(name, "docs", "openapi.yaml")},
+		)
+	}
+
 	for _, f := range projectFiles {
 		t := tmpl.Lookup(f.tmplName)
 		if t == nil {
@@ -106,6 +117,15 @@ func runNew(_ *cobra.Command, args []string) error {
 	fmt.Println("  cp .env.example .env   # fill in your secrets")
 	fmt.Println("  go mod tidy")
 	fmt.Println("  go run ./cmd/api")
+	if newSwagger {
+		fmt.Println()
+		fmt.Printf("  Swagger UI: http://localhost:%d/docs\n", newPort)
+		fmt.Println("  Spec file:  docs/openapi.yaml")
+		fmt.Println()
+		fmt.Println("  After adding modules with --swagger:")
+		fmt.Println("    cp docs/<module>.openapi.yaml docs/openapi.yaml")
+		fmt.Println("    # or merge with: yq '. *+ load(\"docs/<module>.openapi.yaml\")'")
+	}
 	return nil
 }
 

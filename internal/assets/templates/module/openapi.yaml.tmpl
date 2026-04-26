@@ -1,0 +1,234 @@
+openapi: "3.0.3"
+info:
+  title: {{.ModuleTitle}} API
+  version: "1.0.0"
+tags:
+  - name: {{.ModuleTitle}}
+paths:
+  /{{.ModulePlural}}:
+    post:
+      tags: [{{.ModuleTitle}}]
+      summary: Create a {{.ModuleTitle}}
+      operationId: create{{.ModuleTitle}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/{{.ModuleTitle}}CreateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/{{.ModuleTitle}}Response'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      tags: [{{.ModuleTitle}}]
+      summary: List {{.ModulePlural}}
+      operationId: list{{.ModuleTitle}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/{{.ModuleTitle}}ListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /{{.ModulePlural}}/{id}:
+    get:
+      tags: [{{.ModuleTitle}}]
+      summary: Get {{.ModuleTitle}} by ID
+      operationId: get{{.ModuleTitle}}ByID
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/{{.ModuleTitle}}Response'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [{{.ModuleTitle}}]
+      summary: Update {{.ModuleTitle}}
+      operationId: update{{.ModuleTitle}}
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/{{.ModuleTitle}}UpdateRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/{{.ModuleTitle}}Response'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [{{.ModuleTitle}}]
+      summary: Delete {{.ModuleTitle}}
+      operationId: delete{{.ModuleTitle}}
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  parameters:
+    PathID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    {{.ModuleTitle}}View:
+      type: object
+      properties:
+{{- range .Fields}}
+        {{.JSONTag}}:
+{{- if eq .OAType "array"}}
+          type: array
+          items:
+            type: {{.OAItemType}}
+{{- else}}
+          type: {{.OAType}}
+{{- if .OAFormat}}
+          format: {{.OAFormat}}
+{{- end}}
+{{- if .IsNullable}}
+          nullable: true
+{{- end}}
+{{- end}}
+{{- end}}
+    {{.ModuleTitle}}Response:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/{{.ModuleTitle}}View'
+    {{.ModuleTitle}}ListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/{{.ModuleTitle}}View'
+    {{.ModuleTitle}}CreateRequest:
+      type: object
+{{- if .HasRequiredCreateFields}}
+      required:
+{{- range .CreateFields}}{{- if .IsRequired}}
+        - {{.JSONTag}}
+{{- end}}{{- end}}
+{{- end}}
+      properties:
+{{- range .CreateFields}}
+        {{.JSONTag}}:
+{{- if eq .OAType "array"}}
+          type: array
+          items:
+            type: {{.OAItemType}}
+{{- else}}
+          type: {{.OAType}}
+{{- if .OAFormat}}
+          format: {{.OAFormat}}
+{{- end}}
+{{- if .IsNullable}}
+          nullable: true
+{{- end}}
+{{- end}}
+{{- end}}
+    {{.ModuleTitle}}UpdateRequest:
+      type: object
+      properties:
+{{- range .UpdateFields}}
+        {{.JSONTag}}:
+{{- if eq .OAType "array"}}
+          type: array
+          items:
+            type: {{.OAItemType}}
+{{- else}}
+          type: {{.OAType}}
+{{- if .OAFormat}}
+          format: {{.OAFormat}}
+{{- end}}
+          nullable: true
+{{- end}}
+{{- end}}

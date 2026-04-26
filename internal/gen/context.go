@@ -42,6 +42,12 @@ type FieldContext struct {
 	IsLast bool
 	// BindingTag is the Gin binding tag (e.g. `binding:"required"`).
 	BindingTag string
+	// OAType is the OpenAPI primitive type (string, integer, number, boolean, object, array).
+	OAType string
+	// OAFormat is the OpenAPI format qualifier (uuid, int32, int64, float, date-time). Empty when none applies.
+	OAFormat string
+	// OAItemType is the OpenAPI items type for array fields (e.g. "string" for string[]).
+	OAItemType string
 }
 
 // TemplateContext is the data passed to every template.
@@ -67,6 +73,9 @@ type TemplateContext struct {
 
 	HasTimeImport bool
 	HasJSONImport bool
+	// HasRequiredCreateFields is true when at least one CreateField has IsRequired=true.
+	// Used by openapi.yaml.tmpl to emit the required: block.
+	HasRequiredCreateFields bool
 
 	// PostgreSQL raw-query helpers (populated only for the postgres adapter).
 	InsertColumns      string // "email, name, age"
@@ -119,6 +128,9 @@ func Build(s *schema.Schema, adapter schema.Adapter, modulePath, moduleName stri
 			ViewIsString:      info.ViewIsString,
 			IsNullableScalar:  f.Nullable && !info.ViewIsString && !f.Primary,
 			BindingTag:        binding,
+			OAType:            info.OAType,
+			OAFormat:          info.OAFormat,
+			OAItemType:        info.OAItemType,
 		}
 
 		ctx.Fields = append(ctx.Fields, fc)
@@ -140,6 +152,13 @@ func Build(s *schema.Schema, adapter schema.Adapter, modulePath, moduleName stri
 		}
 		if !f.Auto && !f.Primary {
 			ctx.UpdateFields = append(ctx.UpdateFields, fc)
+		}
+	}
+
+	for _, fc := range ctx.CreateFields {
+		if fc.IsRequired {
+			ctx.HasRequiredCreateFields = true
+			break
 		}
 	}
 

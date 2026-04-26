@@ -25,6 +25,7 @@ goclarc new [project-name] [flags]
 | `--db` | `postgres` | Database adapter: `postgres` \| `mongo` \| `rtdb` |
 | `--module-path` | `github.com/<user>/<name>` | Go module path written into `go.mod` |
 | `--port` | `3001` | Default HTTP port in the generated `Config` struct |
+| `--swagger` | `false` | Generate a Swagger UI endpoint at `GET /docs` and an `openapi.yaml` spec |
 
 ## Examples
 
@@ -40,6 +41,9 @@ goclarc new my-api --db rtdb --module-path github.com/acme/my-api
 
 # Custom port
 goclarc new my-api --module-path github.com/acme/my-api --port 8080
+
+# With Swagger UI docs endpoint
+goclarc new my-api --module-path github.com/acme/my-api --swagger
 ```
 
 ## Generated Structure
@@ -67,6 +71,17 @@ my-api/
   .gitignore
   .env.example                # Adapter-specific env var examples
 ```
+
+With `--swagger`, two additional files are generated:
+
+```
+my-api/
+  docs/
+    swagger.go                # package docs — serves Swagger UI + openapi.yaml
+    openapi.yaml              # starter OpenAPI 3.0 spec (add module specs here)
+```
+
+The `docs` package is imported by `main.go` and mounted at `GET /docs`. No external tools or extra dependencies are required.
 
 ## Generated `main.go`
 

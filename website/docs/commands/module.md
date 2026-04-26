@@ -31,6 +31,7 @@ goclarc module [name] [flags]
 | `--dry-run` | | `false` | Print generated output to stdout — write nothing |
 | `--reset` | | `false` | Delete all files previously generated for this module |
 | `--module-path` | | *(from go.mod)* | Go module path for import statements |
+| `--swagger` | | `false` | Generate `docs/<name>.openapi.yaml` OpenAPI 3.0 spec for this module |
 
 ## Examples
 
@@ -57,6 +58,9 @@ goclarc module user --db postgres --schema schemas/user.yaml --force
 
 # Remove all generated files for a module
 goclarc module user --db postgres --schema schemas/user.yaml --reset
+
+# Generate OpenAPI 3.0 spec alongside the module
+goclarc module user --db postgres --schema schemas/user.yaml --swagger
 ```
 
 ## Generated Files
@@ -75,6 +79,21 @@ schemas/queries/
   users.sql       ← CRUD SQL reference (postgres only)
 db/migrations/
   001_create_users.sql  ← CREATE TABLE migration (postgres only)
+```
+
+With `--swagger`, one additional file is generated:
+
+```
+docs/
+  user.openapi.yaml   ← Complete OpenAPI 3.0 spec for the user module
+```
+
+Merge it into `docs/openapi.yaml` (created by `goclarc new --swagger`) to update the live spec:
+
+```bash
+cp docs/user.openapi.yaml docs/openapi.yaml
+# or merge multiple modules with yq:
+# yq '. *+ load("docs/user.openapi.yaml")' docs/openapi.yaml > docs/openapi.yaml
 ```
 
 ## Resetting a Module

@@ -176,6 +176,30 @@ Your endpoints are live:
 | `PATCH` | `/api/v1/users/:id` | `Update` |
 | `DELETE` | `/api/v1/users/:id` | `Delete` |
 
+## 8. Enable Swagger UI (optional)
+
+Pass `--swagger` to both commands to generate browsable API docs with zero extra dependencies:
+
+```bash
+# Recreate the project with --swagger (or start fresh)
+goclarc new my-api --db postgres --module-path github.com/you/my-api --swagger
+
+# Generate the module spec alongside the module code
+goclarc module user --db postgres --schema schemas/user.yaml --swagger
+
+# Copy the module spec into docs/openapi.yaml so the UI picks it up
+cp docs/user.openapi.yaml docs/openapi.yaml
+```
+
+Start the server and open your browser:
+
+```
+http://localhost:3001/docs             → Swagger UI
+http://localhost:3001/docs/openapi.yaml → raw OpenAPI 3.0 spec
+```
+
+The spec is generated directly from your schema — field types, required constraints, and nullable flags are all accurate at generation time. See the [Generated Code Guide](./generated-code) for details on `docs/swagger.go` and `docs/openapi.yaml`.
+
 ## Next Steps
 
 - Add a second module: `goclarc module cart --db postgres --schema schemas/cart.yaml`

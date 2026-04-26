@@ -17,6 +17,17 @@ func NewHandler(service Service) *Handler {
 }
 
 // Create handles POST /{{.ModulePlural}}
+//
+// @Summary      Create a {{.ModuleTitle}}
+// @Tags         {{.ModuleTitle}}
+// @Accept       json
+// @Produce      json
+// @Param        body  body     CreateRequest  true  "{{.ModuleTitle}} payload"
+// @Success      201   {object} map[string]any
+// @Failure      400   {object} map[string]any
+// @Failure      401   {object} map[string]any
+// @Failure      500   {object} map[string]any
+// @Router       /{{.ModulePlural}} [post]
 func (h *Handler) Create(c *gin.Context) {
 	var req CreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -32,6 +43,16 @@ func (h *Handler) Create(c *gin.Context) {
 }
 
 // GetByID handles GET /{{.ModulePlural}}/:id
+//
+// @Summary      Get {{.ModuleTitle}} by ID
+// @Tags         {{.ModuleTitle}}
+// @Produce      json
+// @Param        id    path     string  true  "{{.ModuleTitle}} ID"
+// @Success      200   {object} map[string]any
+// @Failure      404   {object} map[string]any
+// @Failure      401   {object} map[string]any
+// @Failure      500   {object} map[string]any
+// @Router       /{{.ModulePlural}}/{id} [get]
 func (h *Handler) GetByID(c *gin.Context) {
 	entity, err := h.service.GetByID(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -42,6 +63,14 @@ func (h *Handler) GetByID(c *gin.Context) {
 }
 
 // List handles GET /{{.ModulePlural}}
+//
+// @Summary      List {{.ModulePlural}}
+// @Tags         {{.ModuleTitle}}
+// @Produce      json
+// @Success      200   {object} map[string]any
+// @Failure      401   {object} map[string]any
+// @Failure      500   {object} map[string]any
+// @Router       /{{.ModulePlural}} [get]
 func (h *Handler) List(c *gin.Context) {
 	entities, err := h.service.List(c.Request.Context())
 	if err != nil {
@@ -56,6 +85,19 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 // Update handles PATCH /{{.ModulePlural}}/:id
+//
+// @Summary      Update {{.ModuleTitle}}
+// @Tags         {{.ModuleTitle}}
+// @Accept       json
+// @Produce      json
+// @Param        id    path     string         true  "{{.ModuleTitle}} ID"
+// @Param        body  body     UpdateRequest  true  "Fields to update"
+// @Success      200   {object} map[string]any
+// @Failure      400   {object} map[string]any
+// @Failure      404   {object} map[string]any
+// @Failure      401   {object} map[string]any
+// @Failure      500   {object} map[string]any
+// @Router       /{{.ModulePlural}}/{id} [patch]
 func (h *Handler) Update(c *gin.Context) {
 	var req UpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -71,6 +113,15 @@ func (h *Handler) Update(c *gin.Context) {
 }
 
 // Delete handles DELETE /{{.ModulePlural}}/:id
+//
+// @Summary      Delete {{.ModuleTitle}}
+// @Tags         {{.ModuleTitle}}
+// @Param        id    path     string  true  "{{.ModuleTitle}} ID"
+// @Success      204
+// @Failure      404   {object} map[string]any
+// @Failure      401   {object} map[string]any
+// @Failure      500   {object} map[string]any
+// @Router       /{{.ModulePlural}}/{id} [delete]
 func (h *Handler) Delete(c *gin.Context) {
 	if err := h.service.Delete(c.Request.Context(), c.Param("id")); err != nil {
 		_ = c.Error(err)
