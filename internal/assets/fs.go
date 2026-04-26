@@ -12,3 +12,8 @@ var ModuleFS embed.FS
 //
 //go:embed all:templates/project
 var ProjectFS embed.FS
+
+// CryptoFS contains all templates under templates/crypto/.
+//
+//go:embed templates/crypto
+var CryptoFS embed.FS

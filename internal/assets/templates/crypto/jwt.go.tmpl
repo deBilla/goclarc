@@ -1,0 +1,70 @@
+package {{.Package}}
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+)
+
+// Claims is the JWT payload shared by access and refresh tokens.
+type Claims struct {
+	jwt.RegisteredClaims
+	UserID string `json:"user_id"`
+}
+
+// GenerateAccessToken returns a 15-minute signed JWT for userID.
+func GenerateAccessToken(secret, userID string) (string, error) {
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   userID,
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+		UserID: userID,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(secret))
+	if err != nil {
+		return "", fmt.Errorf("jwt: sign access token: %w", err)
+	}
+	return signed, nil
+}
+
+// GenerateRefreshToken returns a 30-day signed JWT for userID.
+// jti must be a unique identifier stored alongside the token in Redis.
+func GenerateRefreshToken(secret, userID, jti string) (string, error) {
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
+			Subject:   userID,
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(30 * 24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+		UserID: userID,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(secret))
+	if err != nil {
+		return "", fmt.Errorf("jwt: sign refresh token: %w", err)
+	}
+	return signed, nil
+}
+
+// ParseToken validates a JWT and returns its claims.
+func ParseToken(secret, tokenStr string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("jwt: unexpected signing method: %v", t.Header["alg"])
+		}
+		return []byte(secret), nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("jwt: parse: %w", err)
+	}
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		return nil, fmt.Errorf("jwt: invalid claims")
+	}
+	return claims, nil
+}

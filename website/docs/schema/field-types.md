@@ -115,6 +115,8 @@ Arbitrary JSON / document data.
 | **Create** | `json.RawMessage` | `bson.M` | `map[string]interface{}` |
 | **Update** | `json.RawMessage` | `bson.M` | `map[string]interface{}` |
 
+> **`nullable` has no effect on `json` fields.** All three Go types are already reference types (slice or map). Setting `nullable: true` does not introduce a pointer and does not generate a nil-guard dereference in `ToView()` — the field is assigned directly.
+
 ---
 
 ### `string[]`

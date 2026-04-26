@@ -32,6 +32,8 @@ goclarc module [name] [flags]
 | `--reset` | | `false` | Delete all files previously generated for this module |
 | `--module-path` | | *(from go.mod)* | Go module path for import statements |
 | `--swagger` | | `false` | Generate `docs/<name>.openapi.yaml` OpenAPI 3.0 spec for this module |
+| `--mode` | | *(full stack)* | `repo` — generate entity, dto, repository, and migration only (no service, handler, or routes) |
+| `--parent` | | *(none)* | Parent route prefix for nested resources, e.g. `/workspaces/:workspaceId`. The module routes are mounted under this prefix. |
 
 ## Examples
 
@@ -104,6 +106,55 @@ The `--reset` flag deletes every file that would have been generated for the mod
 # Remove all generated files, then regenerate with updated schema
 goclarc module user --db postgres --schema schemas/user.yaml --reset
 goclarc module user --db postgres --schema schemas/user.yaml
+```
+
+## Repository-Only Mode
+
+Use `--mode repo` when a module needs a data layer but no HTTP surface — join tables, audit logs, or internal storage modules:
+
+```bash
+goclarc module workspace_member --db postgres --schema schemas/workspace_member.yaml --mode repo
+```
+
+Generated files (postgres):
+
+```
+internal/modules/workspace_member/
+  entity.go        ← Entity, View, ToView()
+  dto.go           ← CreateParams, UpdateParams
+  repository.go    ← Repository interface + implementation
+db/migrations/
+  001_create_workspace_members.sql
+```
+
+`service.go`, `handler.go`, and `routes.go` are **not** generated.
+
+## Nested Resources
+
+Use `--parent` to mount a module's routes under a parent resource path:
+
+```bash
+goclarc module sheet --db postgres --schema schemas/sheet.yaml \
+  --parent "/workspaces/:workspaceId"
+```
+
+The generated `RegisterRoutes` becomes:
+
+```go
+func RegisterRoutes(rg *gin.RouterGroup, h *Handler, middlewares ...gin.HandlerFunc) {
+    g := rg.Group("/workspaces/:workspaceId/sheets", middlewares...)
+    g.POST("", h.Create)
+    g.GET("", h.List)
+    g.GET("/:id", h.GetByID)
+    g.PATCH("/:id", h.Update)
+    g.DELETE("/:id", h.Delete)
+}
+```
+
+The parent param name must not be `:id` — that name is reserved for the module's own resource identifier. goclarc rejects conflicting names at generation time:
+
+```
+Error: --parent "/foo/:id" contains :id which conflicts with the module's own /:id param
 ```
 
 :::caution

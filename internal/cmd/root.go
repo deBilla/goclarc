@@ -28,4 +28,5 @@ func Execute() {
 func init() {
 	rootCmd.AddCommand(newCmd)
 	rootCmd.AddCommand(moduleCmd)
+	rootCmd.AddCommand(cryptoCmd)
 }

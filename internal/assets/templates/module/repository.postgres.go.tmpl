@@ -15,7 +15,11 @@ import (
 type Repository interface {
 	Create(ctx context.Context, p CreateParams) (*Entity, error)
 	GetByID(ctx context.Context, id string) (*Entity, error)
+{{- if .ScopeBy}}
+	ListByUserID(ctx context.Context, userID string) ([]*Entity, error)
+{{- else}}
 	List(ctx context.Context) ([]*Entity, error)
+{{- end}}
 	Update(ctx context.Context, p UpdateParams) (*Entity, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -60,6 +64,33 @@ func (r *repository) GetByID(ctx context.Context, id string) (*Entity, error) {
 	return entity, nil
 }
 
+{{- if .ScopeBy}}
+
+func (r *repository) ListByUserID(ctx context.Context, userID string) ([]*Entity, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT {{.SelectColumns}} FROM {{.TableName}} WHERE {{.ScopeBy}} = $1 ORDER BY created_at DESC`,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.ListByUserID: %w", err)
+	}
+	defer rows.Close()
+
+	var entities []*Entity
+	for rows.Next() {
+		entity, err := scanEntity(rows)
+		if err != nil {
+			return nil, fmt.Errorf("{{.ModuleName}}.repository.ListByUserID scan: %w", err)
+		}
+		entities = append(entities, entity)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.repository.ListByUserID rows: %w", err)
+	}
+	return entities, nil
+}
+{{- else}}
+
 func (r *repository) List(ctx context.Context) ([]*Entity, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT {{.SelectColumns}} FROM {{.TableName}} ORDER BY created_at DESC`,
@@ -82,6 +113,7 @@ func (r *repository) List(ctx context.Context) ([]*Entity, error) {
 	}
 	return entities, nil
 }
+{{- end}}
 
 func (r *repository) Update(ctx context.Context, p UpdateParams) (*Entity, error) {
 	row := r.pool.QueryRow(ctx,

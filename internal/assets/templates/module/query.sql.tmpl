@@ -19,18 +19,23 @@ SELECT * FROM {{.TableName}}
 WHERE id = @id
 LIMIT 1;
 
+{{- if .ScopeBy}}
+
+-- name: List{{.ModuleTitle}}sByUserID :many
+SELECT * FROM {{.TableName}}
+WHERE {{.ScopeBy}} = @{{.ScopeBy}}
+ORDER BY created_at DESC;
+{{- else}}
+
 -- name: List{{.ModuleTitle}}s :many
 SELECT * FROM {{.TableName}}
 ORDER BY created_at DESC;
+{{- end}}
 
 -- name: Update{{.ModuleTitle}} :one
 UPDATE {{.TableName}}
 SET
-{{- range $i, $f := .UpdateFields}}
-{{- if $i}},
-{{- end}}
-  {{$f.Name}} = COALESCE(@{{$f.Name}}, {{$f.Name}})
-{{- end}}
+  {{.QueryUpdateSetClause}}
 WHERE id = @id
 RETURNING *;
 

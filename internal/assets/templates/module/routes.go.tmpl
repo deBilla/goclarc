@@ -4,7 +4,11 @@ import "github.com/gin-gonic/gin"
 
 // RegisterRoutes mounts the {{.ModuleTitle}} CRUD routes onto rg.
 func RegisterRoutes(rg *gin.RouterGroup, h *Handler, middlewares ...gin.HandlerFunc) {
+{{- if .ParentPath}}
+	g := rg.Group("{{.ParentPath}}/{{.ModulePlural}}", middlewares...)
+{{- else}}
 	g := rg.Group("/{{.ModulePlural}}", middlewares...)
+{{- end}}
 	g.POST("", h.Create)
 	g.GET("", h.List)
 	g.GET("/:id", h.GetByID)

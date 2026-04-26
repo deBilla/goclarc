@@ -7,11 +7,11 @@ CREATE TABLE {{.TableName}} (
 {{- else if eq .EntityType "*string"}}
     {{.Name}} TEXT{{if not .IsLast}},{{end}}
 {{- else if eq .EntityType "int32"}}
-    {{.Name}} INT{{if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
+    {{.Name}} INT{{if .IsAutoIncrement}} NOT NULL DEFAULT 0{{else if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
 {{- else if eq .EntityType "*int32"}}
     {{.Name}} INT{{if not .IsLast}},{{end}}
 {{- else if eq .EntityType "int64"}}
-    {{.Name}} BIGINT{{if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
+    {{.Name}} BIGINT{{if .IsAutoIncrement}} NOT NULL DEFAULT 0{{else if .IsRequired}} NOT NULL{{end}}{{if not .IsLast}},{{end}}
 {{- else if eq .EntityType "*int64"}}
     {{.Name}} BIGINT{{if not .IsLast}},{{end}}
 {{- else if eq .EntityType "float64"}}

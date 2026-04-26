@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/spf13/cobra"
@@ -32,6 +33,8 @@ var (
 	moduleReset        bool
 	moduleModPath      string
 	moduleSwagger      bool
+	moduleMode         string
+	moduleParent       string
 )
 
 func init() {
@@ -45,6 +48,8 @@ func init() {
 	moduleCmd.Flags().BoolVar(&moduleReset, "reset", false, "delete all files previously generated for this module")
 	moduleCmd.Flags().StringVar(&moduleModPath, "module-path", "", "Go module path (detected from go.mod if omitted)")
 	moduleCmd.Flags().BoolVar(&moduleSwagger, "swagger", false, "generate docs/<name>.openapi.yaml spec for this module")
+	moduleCmd.Flags().StringVar(&moduleMode, "mode", "", `generation mode: "" full stack (default) | "repo" entity+dto+repo+migration only`)
+	moduleCmd.Flags().StringVar(&moduleParent, "parent", "", `parent route prefix for nested resources (e.g. "/workspaces/:workspaceId")`)
 	_ = moduleCmd.MarkFlagRequired("schema")
 }
 
@@ -67,6 +72,13 @@ func runModule(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := gen.Build(s, adapter, modPath, modName)
+
+	if moduleParent != "" {
+		if err := validateParentPath(moduleParent); err != nil {
+			return err
+		}
+		ctx.ParentPath = moduleParent
+	}
 
 	outDir := moduleOutDir
 	if outDir == "" {
@@ -93,7 +105,10 @@ func runModule(cmd *cobra.Command, args []string) error {
 	return gen.RenderFiles(tmpl, ctx, files, opts)
 }
 
-// moduleFiles returns the full list of files that would be generated for a module.
+// moduleFiles returns the list of files to generate for a module.
+// When --mode repo is set, only entity.go, dto.go, repository.go, and
+// migration.sql (postgres only) are included; service, handler, and routes
+// are skipped.
 func moduleFiles(ctx gen.TemplateContext, modName, outDir string) []gen.File {
 	repoTmpl := "repository." + moduleDB + ".go.tmpl"
 
@@ -101,22 +116,27 @@ func moduleFiles(ctx gen.TemplateContext, modName, outDir string) []gen.File {
 		{TemplateName: "entity.go.tmpl", OutputPath: filepath.Join(outDir, "entity.go")},
 		{TemplateName: "dto.go.tmpl", OutputPath: filepath.Join(outDir, "dto.go")},
 		{TemplateName: repoTmpl, OutputPath: filepath.Join(outDir, "repository.go")},
-		{TemplateName: "service.go.tmpl", OutputPath: filepath.Join(outDir, "service.go")},
-		{TemplateName: "handler.go.tmpl", OutputPath: filepath.Join(outDir, "handler.go")},
-		{TemplateName: "routes.go.tmpl", OutputPath: filepath.Join(outDir, "routes.go")},
+	}
+
+	if moduleMode != "repo" {
+		files = append(files,
+			gen.File{TemplateName: "service.go.tmpl", OutputPath: filepath.Join(outDir, "service.go")},
+			gen.File{TemplateName: "handler.go.tmpl", OutputPath: filepath.Join(outDir, "handler.go")},
+			gen.File{TemplateName: "routes.go.tmpl", OutputPath: filepath.Join(outDir, "routes.go")},
+		)
 	}
 
 	if moduleDB == "postgres" {
-		files = append(files,
-			gen.File{
+		if moduleMode != "repo" {
+			files = append(files, gen.File{
 				TemplateName: "query.sql.tmpl",
 				OutputPath:   filepath.Join(moduleQueryDir, modName+"s.sql"),
-			},
-			gen.File{
-				TemplateName: "migration.sql.tmpl",
-				OutputPath:   filepath.Join(moduleMigrationDir, "001_create_"+ctx.TableName+".sql"),
-			},
-		)
+			})
+		}
+		files = append(files, gen.File{
+			TemplateName: "migration.sql.tmpl",
+			OutputPath:   filepath.Join(moduleMigrationDir, "001_create_"+ctx.TableName+".sql"),
+		})
 	}
 
 	if moduleSwagger {
@@ -178,6 +198,18 @@ func parseModuleTemplates() (*template.Template, error) {
 		}
 	}
 	return tmpl, nil
+}
+
+// validateParentPath checks that the parent route prefix does not contain a
+// ":id" wildcard, which would conflict with the module's own /:id segments and
+// cause Gin to panic at startup.
+func validateParentPath(parent string) error {
+	for _, segment := range strings.Split(parent, "/") {
+		if segment == ":id" {
+			return fmt.Errorf("--parent %q contains :id which conflicts with the module's own /:id param; use a distinct name (e.g. :workspaceId)", parent)
+		}
+	}
+	return nil
 }
 
 func detectModulePath() (string, error) {

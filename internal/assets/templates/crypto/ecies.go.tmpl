@@ -1,0 +1,120 @@
+package {{.Package}}
+
+import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha512"
+	"fmt"
+	"io"
+
+	"golang.org/x/crypto/curve25519"
+	"golang.org/x/crypto/hkdf"
+)
+
+// Overhead is the fixed byte cost added to every encrypted payload:
+// 32 (ephemeral X25519 public key) + 16 (IV) + 16 (GCM auth tag).
+const Overhead = 32 + 16 + 16
+
+// Encrypt encrypts plaintext with the recipient's X25519 public key.
+//
+// Wire format: eph_pub(32) | iv(16) | authTag(16) | ciphertext
+func Encrypt(recipientPub, plaintext []byte) ([]byte, error) {
+	// Generate ephemeral X25519 keypair.
+	var ephPriv [32]byte
+	if _, err := io.ReadFull(rand.Reader, ephPriv[:]); err != nil {
+		return nil, fmt.Errorf("ecies encrypt: ephemeral key: %w", err)
+	}
+	ephPub, err := curve25519.X25519(ephPriv[:], curve25519.Basepoint)
+	if err != nil {
+		return nil, fmt.Errorf("ecies encrypt: pub derive: %w", err)
+	}
+
+	// ECDH shared secret.
+	shared, err := curve25519.X25519(ephPriv[:], recipientPub)
+	if err != nil {
+		return nil, fmt.Errorf("ecies encrypt: ecdh: %w", err)
+	}
+
+	key, err := hkdfKey(shared, ephPub)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := newGCM(key)
+	if err != nil {
+		return nil, err
+	}
+
+	iv := make([]byte, 16)
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return nil, fmt.Errorf("ecies encrypt: iv: %w", err)
+	}
+
+	// gcm.Seal produces ciphertext‖tag; reorder to tag‖ciphertext for the wire format.
+	sealed := gcm.Seal(nil, iv, plaintext, nil)
+	ct, tag := sealed[:len(plaintext)], sealed[len(plaintext):]
+
+	out := make([]byte, 0, Overhead+len(plaintext))
+	out = append(out, ephPub...)
+	out = append(out, iv...)
+	out = append(out, tag...)
+	out = append(out, ct...)
+	return out, nil
+}
+
+// Decrypt decrypts a payload produced by Encrypt using the recipient's X25519 private key.
+func Decrypt(recipientPriv, payload []byte) ([]byte, error) {
+	if len(payload) < Overhead {
+		return nil, fmt.Errorf("ecies decrypt: payload too short")
+	}
+	ephPub := payload[:32]
+	iv := payload[32:48]
+	tag := payload[48:64]
+	ct := payload[64:]
+
+	shared, err := curve25519.X25519(recipientPriv, ephPub)
+	if err != nil {
+		return nil, fmt.Errorf("ecies decrypt: ecdh: %w", err)
+	}
+	key, err := hkdfKey(shared, ephPub)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := newGCM(key)
+	if err != nil {
+		return nil, err
+	}
+
+	// Reassemble as ciphertext‖tag for gcm.Open.
+	combined := make([]byte, len(ct)+len(tag))
+	copy(combined, ct)
+	copy(combined[len(ct):], tag)
+
+	plain, err := gcm.Open(nil, iv, combined, nil)
+	if err != nil {
+		return nil, fmt.Errorf("ecies decrypt: open: %w", err)
+	}
+	return plain, nil
+}
+
+func hkdfKey(shared, salt []byte) ([]byte, error) {
+	key := make([]byte, 32)
+	r := hkdf.New(sha512.New, shared, salt, nil)
+	if _, err := io.ReadFull(r, key); err != nil {
+		return nil, fmt.Errorf("ecies: hkdf: %w", err)
+	}
+	return key, nil
+}
+
+func newGCM(key []byte) (cipher.AEAD, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("ecies: aes cipher: %w", err)
+	}
+	// 16-byte nonce to match the DrawPro frontend wire format.
+	gcm, err := cipher.NewGCMWithNonceSize(block, 16)
+	if err != nil {
+		return nil, fmt.Errorf("ecies: gcm: %w", err)
+	}
+	return gcm, nil
+}

@@ -1,0 +1,73 @@
+package {{.Package}}
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+)
+
+const refreshTTL = 30 * 24 * time.Hour
+
+// IssueTokens mints an access/refresh token pair for userID.
+// The refresh token is stored in Redis under the key rt:{userID}:{jti}
+// where jti is embedded in the signed refresh JWT.
+func IssueTokens(ctx context.Context, rdb *redis.Client, jwtSecret, userID string) (accessToken, refreshToken string, err error) {
+	jti, err := randomHex(16)
+	if err != nil {
+		return "", "", fmt.Errorf("redis_tokens: jti: %w", err)
+	}
+
+	accessToken, err = GenerateAccessToken(jwtSecret, userID)
+	if err != nil {
+		return "", "", err
+	}
+	refreshToken, err = GenerateRefreshToken(jwtSecret, userID, jti)
+	if err != nil {
+		return "", "", err
+	}
+
+	key := fmt.Sprintf("rt:%s:%s", userID, jti)
+	if err := rdb.Set(ctx, key, "1", refreshTTL).Err(); err != nil {
+		return "", "", fmt.Errorf("redis_tokens: store refresh token: %w", err)
+	}
+	return accessToken, refreshToken, nil
+}
+
+// ValidateToken parses the refresh token, verifies it exists in Redis,
+// and returns its claims. Returns an error if the token is expired or revoked.
+func ValidateToken(ctx context.Context, rdb *redis.Client, jwtSecret, tokenStr string) (*Claims, error) {
+	claims, err := ParseToken(jwtSecret, tokenStr)
+	if err != nil {
+		return nil, err
+	}
+
+	key := fmt.Sprintf("rt:%s:%s", claims.UserID, claims.ID)
+	if err := rdb.Get(ctx, key).Err(); err != nil {
+		if err == redis.Nil {
+			return nil, fmt.Errorf("redis_tokens: token not found or revoked")
+		}
+		return nil, fmt.Errorf("redis_tokens: validate: %w", err)
+	}
+	return claims, nil
+}
+
+// RevokeToken removes the refresh token from Redis, preventing future use.
+func RevokeToken(ctx context.Context, rdb *redis.Client, userID, jti string) error {
+	key := fmt.Sprintf("rt:%s:%s", userID, jti)
+	if err := rdb.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("redis_tokens: revoke: %w", err)
+	}
+	return nil
+}
+
+func randomHex(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}

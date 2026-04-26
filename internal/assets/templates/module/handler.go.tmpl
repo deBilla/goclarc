@@ -72,7 +72,12 @@ func (h *Handler) GetByID(c *gin.Context) {
 // @Failure      500   {object} map[string]any
 // @Router       /{{.ModulePlural}} [get]
 func (h *Handler) List(c *gin.Context) {
+{{- if .ScopeBy}}
+	userID := c.GetString("userID")
+	entities, err := h.service.ListByUserID(c.Request.Context(), userID)
+{{- else}}
 	entities, err := h.service.List(c.Request.Context())
+{{- end}}
 	if err != nil {
 		_ = c.Error(err)
 		return
@@ -104,7 +109,12 @@ func (h *Handler) Update(c *gin.Context) {
 		_ = c.Error(err)
 		return
 	}
+{{- if .OwnerField}}
+	ownerID := c.GetString("userID")
+	entity, err := h.service.Update(c.Request.Context(), c.Param("id"), ownerID, req)
+{{- else}}
 	entity, err := h.service.Update(c.Request.Context(), c.Param("id"), req)
+{{- end}}
 	if err != nil {
 		_ = c.Error(err)
 		return
@@ -123,7 +133,12 @@ func (h *Handler) Update(c *gin.Context) {
 // @Failure      500   {object} map[string]any
 // @Router       /{{.ModulePlural}}/{id} [delete]
 func (h *Handler) Delete(c *gin.Context) {
+{{- if .OwnerField}}
+	ownerID := c.GetString("userID")
+	if err := h.service.Delete(c.Request.Context(), c.Param("id"), ownerID); err != nil {
+{{- else}}
 	if err := h.service.Delete(c.Request.Context(), c.Param("id")); err != nil {
+{{- end}}
 		_ = c.Error(err)
 		return
 	}

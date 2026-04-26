@@ -28,6 +28,8 @@ type FieldContext struct {
 
 	IsPrimary         bool
 	IsAuto            bool // skipped from Create/Update params
+	IsAutoUpdate      bool // → field = now() in UPDATE SET
+	IsAutoIncrement   bool // → field = field+1 in UPDATE SET
 	IsRequired        bool
 	IsNullable        bool
 	NeedsTimeImport   bool
@@ -67,21 +69,35 @@ type TemplateContext struct {
 	// DBImports are the extra imports needed in repository.go.
 	DBImports []string
 
-	Fields       []FieldContext
-	CreateFields []FieldContext // fields included in CreateParams (non-auto)
-	UpdateFields []FieldContext // fields included in UpdateParams (non-auto, non-primary)
+	Fields             []FieldContext
+	CreateFields       []FieldContext // fields included in CreateParams (non-auto)
+	UpdateFields       []FieldContext // fields included in UpdateParams (non-auto, non-primary)
+	AutoUpdateFields   []FieldContext // auto: true, auto_update: true  → field = now()
+	AutoIncrementFields []FieldContext // auto: true, auto_increment: true → field = field+1
 
 	HasTimeImport bool
 	HasJSONImport bool
 	// HasRequiredCreateFields is true when at least one CreateField has IsRequired=true.
-	// Used by openapi.yaml.tmpl to emit the required: block.
 	HasRequiredCreateFields bool
 
+	// ParentPath is the route group prefix for nested resources (e.g. "/workspaces/:workspaceId").
+	// Set via --parent flag; empty means a top-level group.
+	ParentPath string
+
+	// scope_by / owner_field annotations (populated when set in schema).
+	ScopeBy         string // snake_case field name, e.g. "user_id"
+	OwnerField      string // snake_case field name, e.g. "user_id"
+	ScopeByGoName   string // PascalCase, e.g. "UserID"
+	ScopeByParam    string // camelCase, e.g. "userID"
+	OwnerFieldGoName string // PascalCase, e.g. "UserID"
+	OwnerFieldParam  string // camelCase, e.g. "userID"
+
 	// PostgreSQL raw-query helpers (populated only for the postgres adapter).
-	InsertColumns      string // "email, name, age"
-	InsertPlaceholders string // "$1, $2, $3"
-	SelectColumns      string // "id, email, name, age, created_at"
-	UpdateSetClause    string // "email = COALESCE($2, email), ..."
+	InsertColumns       string // "email, name, age"
+	InsertPlaceholders  string // "$1, $2, $3"
+	SelectColumns       string // "id, email, name, age, created_at"
+	UpdateSetClause     string // "email = COALESCE($2, email), ..., updated_at = now()"
+	QueryUpdateSetClause string // same but @param style for query.sql
 }
 
 // Build assembles a TemplateContext from a parsed schema and a DB adapter.
@@ -99,6 +115,16 @@ func Build(s *schema.Schema, adapter schema.Adapter, modulePath, moduleName stri
 		ModulePath:   modulePath,
 		DBAdapter:    adapter.Name(),
 		DBImports:    adapter.DBImports(modulePath),
+		ScopeBy:      s.ScopeBy,
+		OwnerField:   s.OwnerField,
+	}
+	if s.ScopeBy != "" {
+		ctx.ScopeByGoName = ToPascal(s.ScopeBy)
+		ctx.ScopeByParam = ToCamel(s.ScopeBy)
+	}
+	if s.OwnerField != "" {
+		ctx.OwnerFieldGoName = ToPascal(s.OwnerField)
+		ctx.OwnerFieldParam = ToCamel(s.OwnerField)
 	}
 
 	for _, f := range s.Fields {
@@ -120,13 +146,15 @@ func Build(s *schema.Schema, adapter schema.Adapter, modulePath, moduleName stri
 			ZeroValue:         info.ZeroValue,
 			IsPrimary:         f.Primary,
 			IsAuto:            f.Auto,
+			IsAutoUpdate:      f.AutoUpdate,
+			IsAutoIncrement:   f.AutoIncrement,
 			IsRequired:        f.Required,
 			IsNullable:        f.Nullable,
 			NeedsTimeImport:   info.NeedsTimeImport,
 			NeedsJSONImport:   info.NeedsJSONImport,
 			IsPointerNullable: info.IsPointerNullable,
 			ViewIsString:      info.ViewIsString,
-			IsNullableScalar:  f.Nullable && !info.ViewIsString && !f.Primary,
+			IsNullableScalar:  f.Nullable && !info.ViewIsString && !f.Primary && strings.HasPrefix(info.EntityType, "*"),
 			BindingTag:        binding,
 			OAType:            info.OAType,
 			OAFormat:          info.OAFormat,
@@ -153,6 +181,12 @@ func Build(s *schema.Schema, adapter schema.Adapter, modulePath, moduleName stri
 		if !f.Auto && !f.Primary {
 			ctx.UpdateFields = append(ctx.UpdateFields, fc)
 		}
+		if f.AutoUpdate {
+			ctx.AutoUpdateFields = append(ctx.AutoUpdateFields, fc)
+		}
+		if f.AutoIncrement {
+			ctx.AutoIncrementFields = append(ctx.AutoIncrementFields, fc)
+		}
 	}
 
 	for _, fc := range ctx.CreateFields {
@@ -163,7 +197,8 @@ func Build(s *schema.Schema, adapter schema.Adapter, modulePath, moduleName stri
 	}
 
 	if adapter.Name() == "postgres" {
-		var insertCols, insertPlaceholders, selectCols, updateSet []string
+		var insertCols, insertPlaceholders, selectCols []string
+		var updateSet, queryUpdateSet []string
 		for i, f := range ctx.CreateFields {
 			insertCols = append(insertCols, f.Name)
 			insertPlaceholders = append(insertPlaceholders, fmt.Sprintf("$%d", i+1))
@@ -171,13 +206,26 @@ func Build(s *schema.Schema, adapter schema.Adapter, modulePath, moduleName stri
 		for _, f := range ctx.Fields {
 			selectCols = append(selectCols, f.Name)
 		}
+		// Regular user-supplied update fields use parameterised placeholders.
 		for i, f := range ctx.UpdateFields {
 			updateSet = append(updateSet, fmt.Sprintf("%s = COALESCE($%d, %s)", f.Name, i+2, f.Name))
+			queryUpdateSet = append(queryUpdateSet, fmt.Sprintf("%s = COALESCE(@%s, %s)", f.Name, f.Name, f.Name))
+		}
+		// auto_update fields are server-side literals — no param needed.
+		for _, f := range ctx.AutoUpdateFields {
+			updateSet = append(updateSet, fmt.Sprintf("%s = now()", f.Name))
+			queryUpdateSet = append(queryUpdateSet, fmt.Sprintf("%s = now()", f.Name))
+		}
+		// auto_increment fields bump themselves — no param needed.
+		for _, f := range ctx.AutoIncrementFields {
+			updateSet = append(updateSet, fmt.Sprintf("%s = %s + 1", f.Name, f.Name))
+			queryUpdateSet = append(queryUpdateSet, fmt.Sprintf("%s = %s + 1", f.Name, f.Name))
 		}
 		ctx.InsertColumns = strings.Join(insertCols, ", ")
 		ctx.InsertPlaceholders = strings.Join(insertPlaceholders, ", ")
 		ctx.SelectColumns = strings.Join(selectCols, ", ")
 		ctx.UpdateSetClause = strings.Join(updateSet, ",\n\t\t  ")
+		ctx.QueryUpdateSetClause = strings.Join(queryUpdateSet, ",\n  ")
 	}
 
 	return ctx

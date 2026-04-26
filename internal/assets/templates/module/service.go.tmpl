@@ -3,15 +3,28 @@ package {{.ModuleName}}
 import (
 	"context"
 	"fmt"
+{{- if .OwnerField}}
+
+	apperr "{{.ModulePath}}/internal/core/errors"
+{{- end}}
 )
 
 // Service defines the business operations for the {{.ModuleTitle}} domain.
 type Service interface {
 	Create(ctx context.Context, req CreateRequest) (*Entity, error)
 	GetByID(ctx context.Context, id string) (*Entity, error)
+{{- if .ScopeBy}}
+	ListByUserID(ctx context.Context, userID string) ([]*Entity, error)
+{{- else}}
 	List(ctx context.Context) ([]*Entity, error)
+{{- end}}
+{{- if .OwnerField}}
+	Update(ctx context.Context, id, ownerID string, req UpdateRequest) (*Entity, error)
+	Delete(ctx context.Context, id, ownerID string) error
+{{- else}}
 	Update(ctx context.Context, id string, req UpdateRequest) (*Entity, error)
 	Delete(ctx context.Context, id string) error
+{{- end}}
 }
 
 type service struct {
@@ -39,6 +52,17 @@ func (s *service) GetByID(ctx context.Context, id string) (*Entity, error) {
 	return entity, nil
 }
 
+{{- if .ScopeBy}}
+
+func (s *service) ListByUserID(ctx context.Context, userID string) ([]*Entity, error) {
+	entities, err := s.repo.ListByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.service.ListByUserID: %w", err)
+	}
+	return entities, nil
+}
+{{- else}}
+
 func (s *service) List(ctx context.Context) ([]*Entity, error) {
 	entities, err := s.repo.List(ctx)
 	if err != nil {
@@ -46,6 +70,39 @@ func (s *service) List(ctx context.Context) ([]*Entity, error) {
 	}
 	return entities, nil
 }
+{{- end}}
+
+{{- if .OwnerField}}
+
+func (s *service) Update(ctx context.Context, id, ownerID string, req UpdateRequest) (*Entity, error) {
+	existing, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.service.Update: %w", err)
+	}
+	if existing.{{.OwnerFieldGoName}} != ownerID {
+		return nil, fmt.Errorf("{{.ModuleName}}.service.Update: %w", apperr.ErrForbidden)
+	}
+	entity, err := s.repo.Update(ctx, req.ToUpdateParams(id))
+	if err != nil {
+		return nil, fmt.Errorf("{{.ModuleName}}.service.Update: %w", err)
+	}
+	return entity, nil
+}
+
+func (s *service) Delete(ctx context.Context, id, ownerID string) error {
+	existing, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("{{.ModuleName}}.service.Delete: %w", err)
+	}
+	if existing.{{.OwnerFieldGoName}} != ownerID {
+		return fmt.Errorf("{{.ModuleName}}.service.Delete: %w", apperr.ErrForbidden)
+	}
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return fmt.Errorf("{{.ModuleName}}.service.Delete: %w", err)
+	}
+	return nil
+}
+{{- else}}
 
 func (s *service) Update(ctx context.Context, id string, req UpdateRequest) (*Entity, error) {
 	entity, err := s.repo.Update(ctx, req.ToUpdateParams(id))
@@ -61,3 +118,4 @@ func (s *service) Delete(ctx context.Context, id string) error {
 	}
 	return nil
 }
+{{- end}}
