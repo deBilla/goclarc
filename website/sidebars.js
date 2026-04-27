@@ -8,7 +8,7 @@ const sidebars = {
       type: 'category',
       label: 'CLI Reference',
       collapsed: false,
-      items: ['commands/new', 'commands/module'],
+      items: ['commands/new', 'commands/module', 'commands/crypto'],
     },
     {
       type: 'category',
@@ -23,6 +23,7 @@ const sidebars = {
       items: ['adapters/postgres', 'adapters/mongo', 'adapters/rtdb'],
     },
     'generated-code',
+    'e2ee-architecture',
     'go-best-practices',
     'examples',
   ],
